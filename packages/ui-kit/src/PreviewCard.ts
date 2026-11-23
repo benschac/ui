@@ -229,6 +229,7 @@ import { watchHoverArea } from "./internal/hoverArea.ts"
 import { lineUnder } from "./internal/inlineRect.ts"
 import { onEscape, Point, pointOf } from "./internal/interaction.ts"
 import { listenOutside } from "./internal/outside.ts"
+import { mergeNow } from "./internal/stream.ts"
 import {
   atDocumentOrigin,
   inPlaceBox,
@@ -845,8 +846,7 @@ const TrackPreviewCard = Mount.makeStream(
   "TrackPreviewCard",
   { args: TrackPositionerArgs },
   (node: HTMLElement, args, changes) =>
-    Stream.merge(
-      watchPointer(node, args, changes),
+    mergeNow(
       Positioning.trackPosition(
         node,
         args.position,
@@ -855,7 +855,8 @@ const TrackPreviewCard = Mount.makeStream(
         Stream.map((placement) =>
           PreviewCardMessage.ChangedPlacement({ placement })
         )
-      )
+      ),
+      watchPointer(node, args, changes)
     )
 )
 

@@ -309,6 +309,7 @@ import {
   inSafeArea,
   type Point
 } from "./internal/safeArea.ts"
+import { mergeNow } from "./internal/stream.ts"
 import { layered, raiseAbove } from "./internal/topLayer.ts"
 import {
   frameOf,
@@ -1587,11 +1588,14 @@ const watch = (
       found(anchor)
       cut(anchor)
       fit()
-      const field = input()
-      if (field !== null) {
-        field.focus({ preventScroll: true })
-      } else if (current.active !== null) focusActive(false)
-      else if (current.initialFocus) popup().focus({ preventScroll: true })
+      // After the press that opened it, whose default action focuses the trigger.
+      frame(() => {
+        if (!current.open) return
+        const field = input()
+        if (field !== null) field.focus({ preventScroll: true })
+        else if (current.active !== null) focusActive(false)
+        else if (current.initialFocus) popup().focus({ preventScroll: true })
+      })
       if (!current.started) {
         frame(() => frame(() => send(MenuMessage.RenderedFirstFrame())))
       }
@@ -2111,15 +2115,15 @@ const TrackMenu = Mount.makeStream(
   "TrackMenu",
   { args: TrackMenuArgs },
   (node: HTMLElement, args, changes) =>
-    Stream.merge(
-      watch(node, args, changes),
+    mergeNow(
       Positioning.trackPosition(
         node,
         args.position,
         Stream.map(changes, (next) => next.position)
       ).pipe(
         Stream.map((placement) => MenuMessage.ChangedPlacement({ placement }))
-      )
+      ),
+      watch(node, args, changes)
     )
 )
 

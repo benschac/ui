@@ -507,6 +507,18 @@ describe("Select in a document", { concurrent: false }, () => {
       ])
     }).pipe(Effect.scoped))
 
+  it.effect("a press moves focus into the popup after the browser focuses the trigger", () =>
+    Effect.gen(function*() {
+      yield* mountPage()
+      mousedown(byId("trigger"))
+      // The render flushes on a microtask, before the browser's default action focuses the trigger.
+      yield* Effect.promise(() => Promise.resolve())
+      byId("trigger").focus()
+      yield* tick
+      assert.isTrue(shown())
+      assert.isTrue(byId("positioner").contains(document.activeElement))
+    }).pipe(Effect.scoped))
+
   it.effect("Escape gives focus back to the trigger as the close starts, and the popup is inert through its exit", () =>
     Effect.gen(function*() {
       yield* holdExits

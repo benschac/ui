@@ -53,6 +53,7 @@ import { available, grouped, type Loop, stepped, valued } from "./list.ts"
 import { holdLayer, nextLayerOrder } from "./modal.ts"
 import { listenOutside, releasedOutside } from "./outside.ts"
 import { fillValue } from "./range.ts"
+import { mergeNow } from "./stream.ts"
 import { layered, raiseAbove } from "./topLayer.ts"
 import {
   frameOf,
@@ -986,14 +987,16 @@ const watch = (
       send(Message.ShowedPopup())
       node.inert = false
       cut()
-      if (current.inputInPopup) {
+      // After the press that opened it, whose default action focuses the trigger.
+      frame(() => {
+        if (!current.open || !current.inputInPopup) return
         const input = popup().querySelector<HTMLElement>(
           attrSelector("data-combobox-input", current.owner)
         )
         ;(current.touch || input === null ? popup() : input).focus({
           preventScroll: true
         })
-      }
+      })
       if (!current.started) {
         frame(() => frame(() => send(Message.RenderedFirstFrame())))
       }
@@ -1139,15 +1142,15 @@ const TrackCombobox = Mount.makeStream(
   "TrackCombobox",
   { args: TrackComboboxArgs },
   (node: HTMLElement, args, changes) =>
-    Stream.merge(
-      watch(node, args, changes),
+    mergeNow(
       Positioning.trackPosition(
         node,
         args.position,
         Stream.map(changes, (next) => next.position)
       ).pipe(
         Stream.map((placement) => Message.ChangedPlacement({ placement }))
-      )
+      ),
+      watch(node, args, changes)
     )
 )
 

@@ -173,7 +173,7 @@
         var(--search-height)
     );
     transform: translateX(-50%);
-    width: min(520px, calc(100vw - 48px));
+    width: min(520px, calc(100% - 48px));
   }
 
   .search:focus-within {
@@ -213,7 +213,7 @@
 
   [data-search-layout='Search'] .search {
     @apply fixed top-[13px] z-20 h-[38px];
-    width: min(700px, calc(100vw - 880px));
+    width: min(700px, calc(100% - 880px));
   }
 
   .hero {
@@ -616,7 +616,7 @@
   }
 
   .cart-panel {
-    @apply fixed inset-y-0 right-0 max-h-dvh w-[min(420px,100vw)] overflow-auto overscroll-contain border-gray-700 bg-gray-950 p-6 min-[421px]:border-l;
+    @apply fixed inset-y-0 right-0 max-h-dvh w-[min(420px,100%)] overflow-auto overscroll-contain border-gray-700 bg-gray-950 p-6 min-[421px]:border-l;
   }
 
   .cart-heading {
@@ -660,7 +660,7 @@
 
   @media (max-width: 1200px) {
     [data-search-layout='Search'] .search {
-      width: calc(100vw - 600px);
+      width: calc(100% - 600px);
     }
   }
 
@@ -708,7 +708,7 @@
     }
 
     .search {
-      width: calc(100vw - 36px);
+      width: calc(100% - 36px);
     }
 
     .button,
@@ -726,7 +726,7 @@
 
     [data-search-layout='Search'] .search {
       @apply top-[75px] h-[38px];
-      width: calc(100vw - 32px);
+      width: calc(100% - 32px);
     }
 
     .cart-button {
@@ -855,7 +855,7 @@
 
     .app:has(.search input:focus) .search {
       @apply fixed top-[75px] z-20 h-[38px];
-      width: calc(100vw - 32px);
+      width: calc(100% - 32px);
     }
 
     .app:has(.search input:focus) .cart-button > span:not(.cart-count) {

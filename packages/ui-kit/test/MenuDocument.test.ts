@@ -339,6 +339,18 @@ const popupOf = (positioner: string) =>
   byId(positioner).querySelector<HTMLElement>("[data-menu-popup]")!
 
 describe("Menu in a document", { concurrent: false }, () => {
+  it.effect("a press moves focus into the popup after the browser focuses the trigger", () =>
+    Effect.gen(function*() {
+      yield* mountPage()
+      mousedown(byId("trigger"))
+      // The render flushes on a microtask, before the browser's default action focuses the trigger.
+      yield* Effect.promise(() => Promise.resolve())
+      byId("trigger").focus()
+      yield* tick
+      assert.isTrue(shown("positioner"))
+      assert.strictEqual(document.activeElement, popupOf("positioner"))
+    }))
+
   it.effect("opens from the keyboard onto the first enabled item, moves focus across disabled items, and returns focus on Enter", () =>
     Effect.gen(function*() {
       const { log } = yield* mountPage()
