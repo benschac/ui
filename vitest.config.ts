@@ -94,6 +94,7 @@ export default defineConfig({
       ...example("canvas-art"),
       ...example("counter"),
       ...example("counters"),
+      ...example("domains"),
       ...example("file-preview"),
       ...example("interrupting-commands"),
       ...example("launch"),

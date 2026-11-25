@@ -28,6 +28,7 @@ pnpm add https://pkg.pr.new/Effect-TS/ui/@effect/ui@<sha>
 pnpm --filter auth dev
 pnpm --filter counter dev
 pnpm --filter counters dev
+pnpm --filter domains dev
 pnpm --filter interrupting-commands dev
 pnpm --filter routing dev
 pnpm --filter snake dev
