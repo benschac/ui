@@ -1093,8 +1093,13 @@ const watch = (
       cut()
       align()
       arrows()
-      // After the press that opened it, whose default action focuses the trigger.
-      frame(() => focusActive(false))
+      focusActive(false)
+      // The default action of the press that opened it focuses the trigger.
+      frame(() => {
+        if (current.open && document.activeElement === trigger()) {
+          focusActive(false)
+        }
+      })
       if (!current.aligned) reveal()
       if (!current.started) {
         frame(() => frame(() => send(SelectMessage.RenderedFirstFrame())))

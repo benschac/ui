@@ -1588,13 +1588,16 @@ const watch = (
       found(anchor)
       cut(anchor)
       fit()
-      // After the press that opened it, whose default action focuses the trigger.
-      frame(() => {
-        if (!current.open) return
+      const focusIn = () => {
         const field = input()
         if (field !== null) field.focus({ preventScroll: true })
         else if (current.active !== null) focusActive(false)
         else if (current.initialFocus) popup().focus({ preventScroll: true })
+      }
+      focusIn()
+      // The default action of the press that opened it focuses the trigger.
+      frame(() => {
+        if (current.open && document.activeElement === anchor) focusIn()
       })
       if (!current.started) {
         frame(() => frame(() => send(MenuMessage.RenderedFirstFrame())))
