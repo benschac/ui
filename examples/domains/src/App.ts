@@ -1,8 +1,13 @@
-import { AvailableDomain, type DomainName, domainTlds } from "#domain/Domain"
+import {
+  AvailableDomain,
+  type Domain,
+  type DomainName,
+  domainTlds
+} from "#domain/Domain"
 import {
   AvailabilityFilter,
   catalogRange,
-  DomainListing,
+  type DomainListing,
   filterAndSortListings,
   formatPrice,
   formatRegistrationPrice,
@@ -25,7 +30,7 @@ import {
   UiSchema,
   UiStruct
 } from "@effect/ui"
-import { Dialog, Select, VirtualList } from "@effect/ui-kit"
+import { Dialog, Select, type SelectItem, VirtualList } from "@effect/ui-kit"
 import { Html, HtmlCommand, HtmlHead } from "@effect/ui/html"
 import { Array, Effect, Order, Schema } from "effect"
 import { AsyncResult } from "effect/reactivity"
@@ -129,7 +134,7 @@ const withVisiblePages = (model: AppModel): AppModel => {
     return model.catalog ? model : UiStruct.evolve(model, { catalog: true })
   }
   const listings = filterAndSortListings(
-    queryToListings(queryOf(model.route), []),
+    queryToListings(queryOf(model.route)),
     model.tldFilter,
     "All",
     model.sort
@@ -405,9 +410,6 @@ const Hero = AppDef.fragment((h, model: AppModel) =>
   )
 )
 
-const isUnavailable = (listing: DomainListing): boolean =>
-  listing._tag === "Checked" && listing.domain._tag === "Unavailable"
-
 const DomainNameText = AppDef.fragment((h, domain: DomainName) => [
   h.span.attr("data-domain-label", "").children(
     domain.name.slice(0, -(domain.tld.length + 1))
@@ -416,14 +418,13 @@ const DomainNameText = AppDef.fragment((h, domain: DomainName) => [
 ])
 
 const DomainAction = AppDef.fragment(
-  (h, model: AppModel, listing: DomainListing) => {
-    if (listing._tag === "Unchecked") {
+  (h, model: AppModel, domain: Domain | undefined) => {
+    if (domain === undefined) {
       return h.div.class("domain-action").attr("aria-hidden", "true").children(
         h.span.class("skeleton skeleton-price"),
         h.span.class("skeleton skeleton-action")
       )
     }
-    const domain = listing.domain
     if (domain._tag === "Unavailable") {
       return h.div.class("domain-action").children(
         h.span.class("unavailable").attr(
@@ -462,9 +463,7 @@ interface FilterSelectOptions {
   readonly popup: Popup
   readonly label: string
   readonly value: string
-  readonly items: ReadonlyArray<
-    { readonly value: string; readonly label: string }
-  >
+  readonly items: ReadonlyArray<SelectItem>
   readonly picked: (value: string) => AppMessage | undefined
 }
 
@@ -775,12 +774,12 @@ const ResultsList = AppDef.fragment((
             return virtualList.item({
               element: h.li.key(listing.name).class(
                 "domain-row",
-                isUnavailable(listing) && "is-unavailable"
+                listing.domain?._tag === "Unavailable" && "is-unavailable"
               ),
               index
             }).children(
               h.span.class("domain-name").children(DomainNameText(h, listing)),
-              DomainAction(h, model, listing)
+              DomainAction(h, model, listing.domain)
             )
           })
         )
@@ -789,14 +788,7 @@ const ResultsList = AppDef.fragment((
       results.slice(0, PREVIEW_RESULT_COUNT).map((listing) =>
         h.li.key(listing.name).class("domain-row").children(
           h.span.class("domain-name").children(DomainNameText(h, listing)),
-          DomainAction(
-            h,
-            model,
-            DomainListing.cases.Unchecked.make({
-              name: listing.name,
-              tld: listing.tld
-            })
-          )
+          DomainAction(h, model, undefined)
         )
       )
     )
@@ -825,7 +817,7 @@ const Results = AppDef.fragment((h, model: AppModel) => {
   }
   const allListings = queryToListings(
     query,
-    search._tag === "Ready" ? search.domains : []
+    search._tag === "Ready" ? search.domains : undefined
   )
   const listings = filterAndSortListings(
     allListings,
@@ -847,10 +839,10 @@ const Results = AppDef.fragment((h, model: AppModel) => {
             allListings.slice(0, TOP_RESULT_COUNT).map((listing) =>
               h.article.key(listing.name).class(
                 "domain-card",
-                isUnavailable(listing) && "is-unavailable"
+                listing.domain?._tag === "Unavailable" && "is-unavailable"
               ).children(
                 h.h3(...DomainNameText(h, listing)),
-                DomainAction(h, model, listing)
+                DomainAction(h, model, listing.domain)
               )
             )
           ),
@@ -878,8 +870,8 @@ const Results = AppDef.fragment((h, model: AppModel) => {
         ? h.p.attrs({ role: "status", "aria-atomic": "true" }).class(
           "result-count"
         ).children(
-          search.domains.length < domainTlds.length
-            ? search.domains.length + " of " + domainTlds.length +
+          search.domains.size < domainTlds.length
+            ? search.domains.size + " of " + domainTlds.length +
               " domains checked · Registration prices in USD"
             : listings.length + " domains · Registration prices in USD"
         )

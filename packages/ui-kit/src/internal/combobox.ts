@@ -987,21 +987,24 @@ const watch = (
       send(Message.ShowedPopup())
       node.inert = false
       cut()
-      const focusIn = () => {
-        if (!current.inputInPopup) return
-        const input = popup().querySelector<HTMLElement>(
-          attrSelector("data-combobox-input", current.owner)
-        )
-        ;(current.touch || input === null ? popup() : input).focus({
-          preventScroll: true
+      if (current.inputInPopup) {
+        const focusIn = () => {
+          const input = popup().querySelector<HTMLElement>(
+            attrSelector("data-combobox-input", current.owner)
+          )
+          ;(current.touch || input === null ? popup() : input).focus({
+            preventScroll: true
+          })
+        }
+        focusIn()
+        // The default action of the press that opened it focuses the trigger.
+        frame(() => {
+          if (
+            current.open &&
+            document.activeElement === find("data-combobox-trigger")
+          ) focusIn()
         })
       }
-      focusIn()
-      // The default action of the press that opened it focuses the trigger.
-      frame(() => {
-        const trigger = attrSelector("data-combobox-trigger", current.owner)
-        if (current.open && document.activeElement?.matches(trigger)) focusIn()
-      })
       if (!current.started) {
         frame(() => frame(() => send(Message.RenderedFirstFrame())))
       }

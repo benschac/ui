@@ -1,19 +1,17 @@
 import { Array, Order, Schema } from "effect"
 import {
   type AvailableDomain,
-  Domain,
+  type Domain,
   domainCandidates,
-  DomainName,
+  type DomainName,
   type DomainRange,
   domainTlds,
   labelOf
 } from "./Domain.ts"
 
-export const DomainListing = Schema.TaggedUnion({
-  Unchecked: DomainName.fields,
-  Checked: { ...DomainName.fields, domain: Domain }
-})
-export type DomainListing = typeof DomainListing.Type
+export interface DomainListing extends DomainName {
+  readonly domain: Domain | undefined
+}
 
 export const TldFilter = Schema.String
 export type TldFilter = typeof TldFilter.Type
@@ -60,26 +58,14 @@ export const rangeOfPage = (page: number): DomainRange => {
   }
 }
 
-export const mergeDomainsByName = (
-  previous: ReadonlyArray<Domain>,
-  incoming: ReadonlyArray<Domain>
-): ReadonlyArray<Domain> => {
-  const names = new Set(incoming.map((domain) => domain.name))
-  return [...previous.filter((domain) => !names.has(domain.name)), ...incoming]
-}
-
 export const queryToListings = (
   query: string,
-  domains: ReadonlyArray<Domain>
-): ReadonlyArray<DomainListing> => {
-  const byName = new Map(domains.map((domain) => [domain.name, domain]))
-  return domainCandidates(labelOf(query) ?? "").map((candidate) => {
-    const domain = byName.get(candidate.name)
-    return domain === undefined
-      ? DomainListing.cases.Unchecked.make(candidate)
-      : DomainListing.cases.Checked.make({ ...candidate, domain })
-  })
-}
+  domains?: ReadonlyMap<string, Domain>
+): ReadonlyArray<DomainListing> =>
+  domainCandidates(labelOf(query) ?? "").map((candidate) => ({
+    ...candidate,
+    domain: domains?.get(candidate.name)
+  }))
 
 const nameOrder = Order.mapInput(
   Order.String,
@@ -91,19 +77,12 @@ const lengthOrder = Order.combine(
 )
 const availabilityOrder = Order.mapInput(
   Order.Number,
-  (listing: DomainListing) =>
-    listing._tag === "Unchecked"
-      ? 2
-      : listing.domain._tag === "Unavailable"
-      ? 1
-      : 0
+  ({ domain }: DomainListing) =>
+    domain === undefined ? 2 : domain._tag === "Unavailable" ? 1 : 0
 )
 const priceOrder = Order.mapInput(
   Order.Number,
-  (listing: DomainListing) =>
-    listing._tag === "Checked" && listing.domain._tag === "Available"
-      ? listing.domain.price
-      : 0
+  ({ domain }: DomainListing) => domain?._tag === "Available" ? domain.price : 0
 )
 
 export const filterAndSortListings = (
@@ -114,8 +93,7 @@ export const filterAndSortListings = (
 ): ReadonlyArray<DomainListing> => {
   const matching = listings.filter((listing) =>
     (tldFilter === "All" || listing.tld === tldFilter) &&
-    (availability === "All" || listing._tag === "Unchecked" ||
-      listing.domain._tag === "Available")
+    (availability === "All" || listing.domain?._tag !== "Unavailable")
   )
   switch (sort) {
     case "Relevance":

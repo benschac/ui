@@ -1,5 +1,4 @@
 import { type Domain, labelOf, type SearchUnavailable } from "#domain/Domain"
-import { mergeDomainsByName } from "#domain/Listing"
 import { AsyncResult } from "effect/reactivity"
 
 export type DomainsResult = AsyncResult.AsyncResult<
@@ -14,7 +13,7 @@ export type SearchState =
   | { readonly _tag: "Failed" }
   | {
     readonly _tag: "Ready"
-    readonly domains: ReadonlyArray<Domain>
+    readonly domains: ReadonlyMap<string, Domain>
     readonly loading: boolean
     readonly failed: boolean
   }
@@ -38,12 +37,10 @@ export const searchState = (
       ? { _tag: "Failed" }
       : { _tag: "Loading" }
   }
+  const domains = settled.flatMap((result) => result.value)
   return {
     _tag: "Ready",
-    domains: settled.reduce<ReadonlyArray<Domain>>(
-      (domains, result) => mergeDomainsByName(domains, result.value),
-      []
-    ),
+    domains: new Map(domains.map((domain) => [domain.name, domain])),
     loading: results.some((result) =>
       result.waiting || AsyncResult.isInitial(result)
     ),
