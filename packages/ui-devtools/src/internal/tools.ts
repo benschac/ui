@@ -33,7 +33,6 @@ export interface Backend {
   readonly pageOf: (session: string) => Page | undefined
   readonly until: <A>(check: () => A | undefined) => Effect.Effect<A>
   readonly within: number
-  readonly gap: "skipped" | "excluded"
 }
 
 export const makeWaiters = () => {
@@ -423,7 +422,11 @@ export const handlers = (server: Backend) => {
     if ((server.history.latest(session.id) ?? -1) < seq) return undefined
     if (session.resolve(seq)._tag !== "Outside") return "seen"
     const first = session.entries()[0]?.seq
-    return first !== undefined && seq < first ? "evicted" : server.gap
+    return first !== undefined && seq < first
+      ? "evicted"
+      : server.history.skipped(session.id, seq)
+      ? "skipped"
+      : "excluded"
   }
 
   const ask = (session: Inspector.Session, request: Control.Request) =>

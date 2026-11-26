@@ -540,8 +540,7 @@ const makeInternal = (options: Options, auto: boolean): Layer.Layer<never> =>
               }
               : undefined,
           until,
-          within: 8_000,
-          gap: "excluded"
+          within: 8_000
         })
       }
       const log = MessageLog.fanoutAll(logs)

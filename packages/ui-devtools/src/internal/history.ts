@@ -18,10 +18,12 @@ export interface History {
   readonly clear: (session: string, upTo: number) => void
   readonly drop: (session: string) => void
   readonly holds: (session: string, seq: number) => boolean
-  /** A shown entry. */
+  /** An entry held, shown or excluded. */
   readonly entry: (session: string, seq: number) => Entry | undefined
   /** The last seq recorded, shown or not. */
   readonly latest: (session: string) => number | undefined
+  /** Whether a seq never arrived, while later ones did. */
+  readonly skipped: (session: string, seq: number) => boolean
   readonly at: (session: string, seq: number) => State | undefined
   readonly instanceAt: (
     session: string,
@@ -91,6 +93,8 @@ const makeSession = (size: number) => {
   const entries: Array<Entry> = []
   const shown = new Map<number, Entry>()
   const coalesced = new Map<number, Entry>()
+  // Ranges of seqs that never arrived, kept until older than the entries held.
+  const gaps: Array<readonly [number, number]> = []
   let floor = -Infinity
   let last = -Infinity
   const drop = () => {
@@ -101,6 +105,7 @@ const makeSession = (size: number) => {
       coalesced.delete(oldest.instance)
     }
     apply(base, oldest, false)
+    while (gaps.length > 0 && gaps[0]![1] < floor) gaps.shift()
   }
   const fold = (seq: number) => {
     const states = new Map(base)
@@ -113,6 +118,9 @@ const makeSession = (size: number) => {
   return {
     record: (entry: Entry) => {
       if (entry.seq <= last) return
+      if (entry.seq > last + 1 && last !== -Infinity) {
+        gaps.push([last + 1, entry.seq - 1])
+      }
       last = entry.seq
       if (entry._tag === "Update" && entry.excluded === true) {
         const replaced = coalesced.get(entry.instance)
@@ -138,8 +146,11 @@ const makeSession = (size: number) => {
       while (entries.length > 0 && entries[0]!.seq <= upTo) drop()
     },
     holds: (seq: number) => shown.has(seq),
-    entry: (seq: number) => shown.get(seq),
+    entry: (seq: number) =>
+      shown.get(seq) ?? entries.find((entry) => entry.seq === seq),
     latest: () => last,
+    skipped: (seq: number) =>
+      gaps.some(([from, to]) => from <= seq && seq <= to),
     at: (seq: number): State => {
       const states = fold(seq)
       const byPath = new Map<string, BrowserHost.Recorded>()
@@ -202,6 +213,7 @@ export const make = (size: number): History => {
     holds: (session, seq) => sessions.get(session)?.holds(seq) ?? false,
     entry: (session, seq) => sessions.get(session)?.entry(seq),
     latest: (session) => sessions.get(session)?.latest(),
+    skipped: (session, seq) => sessions.get(session)?.skipped(seq) ?? false,
     at: (session, seq) => {
       const held = sessions.get(session)
       return held === undefined || !held.holds(seq) ? undefined : held.at(seq)

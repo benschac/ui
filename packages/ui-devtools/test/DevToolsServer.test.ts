@@ -918,24 +918,28 @@ describe("DevToolsServer", { concurrent: false }, () => {
   )
 
   it.live(
-    "holds an excluded update as arrived, and replays it to a late viewer as the next diff's baseline",
+    "tells a coalesced excluded update from a skipped one, and replays the kept one to a late viewer as the next diff's baseline",
     () =>
       Effect.gen(function*() {
         const { agent, url } = yield* serveFast(47756, 1_000)
-        const log = yield* fakePage(url, (log) =>
+        const log = yield* fakePage(url, (log, message) =>
           Effect.sync(() => {
-            log.send(updateAt(2, true))
-            return { _tag: "Updated", seq: 2 } as const
+            const seq = 2 + (message as { n: number }).n
+            log.send(updateAt(seq, true))
+            return { _tag: "Updated", seq } as const
           }))
         const sent = yield* agent.call("dispatch", {
           session: "s",
           instance: 1,
-          messages: go(1)
+          messages: go(2)
         })
         assert.isUndefined(sent.unseen)
-        assert.isUndefined(sent.unavailable)
+        assert.deepStrictEqual(sent.unavailable, [{
+          seq: 2,
+          reason: "excluded"
+        }])
 
-        log.send(updateAt(3, false))
+        log.send(updateAt(4, false))
         yield* wait(100)
         const watch = yield* connectSocket(
           url.replace("http", "ws") + "/watch"
@@ -946,10 +950,10 @@ describe("DevToolsServer", { concurrent: false }, () => {
           const frame = JSON.parse(String(event.data))
           if (frame._tag !== "Held") frames.push(frame)
         })
-        yield* until(() => frames.some((frame) => frame.seq === 3))
+        yield* until(() => frames.some((frame) => frame.seq === 4))
         const viewer = Inspector.make()
         viewer.ingest(frames)
-        assert.strictEqual(viewer.sessions()[0]!.previous(3)?.seq, 2)
+        assert.strictEqual(viewer.sessions()[0]!.previous(4)?.seq, 3)
       }).pipe(Effect.scoped),
     30_000
   )

@@ -381,6 +381,13 @@ describe("DevTools overlay", { concurrent: false }, () => {
           name: "Time travel"
         }) as HTMLButtonElement
         assert.isTrue(travel.disabled)
+        yield* click(
+          HtmlLocator.getByRole(root, "button", {
+            name: "Start recording Move"
+          })
+        )
+        assert.strictEqual(headline(root), "Move")
+        HtmlLocator.getByRole(root, "button", { name: "Stop recording Move" })
 
         yield* click(commitB)
         yield* click(commitB)

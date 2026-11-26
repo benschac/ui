@@ -268,8 +268,7 @@ export const make = (options: Options) => {
     pageOf: (session) =>
       Array.from(pages).reverse().find((page) => page.sessions.has(session)),
     until,
-    within: Math.round(timeout * 0.8),
-    gap: "skipped"
+    within: Math.round(timeout * 0.8)
   }
   return { server, routes: Layer.mergeAll(log, control, watch) }
 }
