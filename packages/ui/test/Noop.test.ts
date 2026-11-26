@@ -57,7 +57,8 @@ const commands: Record<
   AllQuiet: () => AllQuiet.make(),
   Empty: () => Empty.make(),
   Loud: () => Loud.make(),
-  LoudAsNoop: () => Loud.make().pipe(Command.asNoop)
+  LoudAsNoop: () => Loud.make().pipe(Command.asNoop),
+  QuietAsGot: () => Quiet.make().pipe(Command.as(got(7)))
 }
 
 /** Records every message it gets, and runs the Command a `Fire` names. */
@@ -203,6 +204,14 @@ describe("Component.noop", () => {
         false
       ])
       assert.deepStrictEqual(root.pending(), [])
+    })))
+
+  it.effect("a mapper turns a Command's Component.noop into a message", () =>
+    run(Effect.gen(function*() {
+      const root = yield* TestHost.mount(Recorder, {})
+      root.send(Message.Fire({ command: "QuietAsGot" }))
+      yield* TestHost.settle
+      assert.deepStrictEqual(root.model(), ["Fire", "Got 7"])
     })))
 
   it.effect("a story resolves a run with Component.noop, or with a result its mapper turns into it, and sends nothing", () =>
