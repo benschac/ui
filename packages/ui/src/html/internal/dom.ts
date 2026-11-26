@@ -127,21 +127,10 @@ const leaving: Array<
   { readonly node: globalThis.Node; readonly kept: boolean }
 > = []
 
-/** Whether `target` is `node` or inside it, through shadow roots. */
-const within = (node: globalThis.Node, target: globalThis.Node | null) => {
-  for (
-    let at = target;
-    at !== null;
-    at = at.parentNode ?? (at as ShadowRoot).host ?? null
-  ) {
-    if (at === node) return true
-  }
-  return false
-}
-
-const isLeaving = (target: globalThis.Node): boolean =>
+/** Whether the event's target, `path[0]`, is in a node being taken out. */
+const isLeaving = (path: ReadonlyArray<globalThis.Node>): boolean =>
   leaving.some(({ kept, node }) =>
-    !(kept && target === node) && within(node, target)
+    !(kept && path[0] === node) && path.includes(node)
   )
 
 /**
@@ -161,10 +150,7 @@ const takingOut = (
   const focused = node.isConnected
     ? (node.getRootNode() as Document | ShadowRoot).activeElement
     : null
-  if (
-    focused === null || focused === undefined || (kept && focused === node) ||
-    !node.contains(focused)
-  ) return f()
+  if (!node.contains(focused) || (kept && focused === node)) return f()
   const entry = { node, kept }
   const back = () => {
     const at = leaving.indexOf(entry)
@@ -653,7 +639,7 @@ export const makeHost = (
       else composing.delete(target)
     }
     if (name === "dragstart") startDrag(event as DragEvent, path)
-    const removed = leaving.length > 0 && isLeaving(target)
+    const removed = isLeaving(path)
     const handled = deliver(
       event,
       path,
@@ -876,8 +862,10 @@ export const makeHost = (
       if (eventOptions.dragstart !== undefined) listen("dragend")
     },
     insert(parent, node, before) {
-      // Moving a node takes it out first.
-      takingOut(node, "moved", () => parent.insertBefore(node, before))
+      // Moving a connected node takes it out first.
+      if (node.isConnected) {
+        takingOut(node, "moved", () => parent.insertBefore(node, before))
+      } else parent.insertBefore(node, before)
     },
     remove(parent, node) {
       takingOut(node, "removed", () => {

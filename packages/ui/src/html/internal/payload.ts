@@ -157,7 +157,7 @@ export const payloadOf = (
   target: EventTarget | null,
   element: globalThis.Element,
   pointer: Html.PointerType | undefined,
-  removed: boolean
+  removed = false
 ): unknown => {
   switch (name) {
     case "click":
