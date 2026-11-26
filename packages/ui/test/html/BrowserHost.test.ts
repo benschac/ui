@@ -1803,15 +1803,27 @@ describe("BrowserHost", { concurrent: false }, () => {
                 h.button.attr("id", "opener"),
                 h.dialog.modal(true).children(h.input)
               ),
-              step === 4 && h.el("x-focus-on-connect").attr("tabindex", "0")
+              step >= 4 && h.div(
+                (step === 4 ? ["moved", "a", "b"] : ["a", "b", "moved"]).map((
+                  key
+                ) =>
+                  key === "moved"
+                    ? h.div.key(key).children(
+                      h.input,
+                      h.el("x-focus-on-connect").attr("tabindex", "0")
+                    )
+                    : h.p.key(key)
+                )
+              )
             )
         })
         const outside = document.body.appendChild(
           document.createElement("button")
         )
-        // Chromium blurs a focused element as it leaves the document, and a closing modal returns focus. happy-dom does neither.
+        // Chromium blurs a focused element as it leaves the document, also to move, and a closing modal returns focus.
+        // happy-dom does none of it.
         const proto = window.Node.prototype
-        const removeChild = proto.removeChild
+        const { insertBefore, removeChild } = proto
         const close = vi.spyOn(window.HTMLDialogElement.prototype, "close")
         yield* Effect.acquireRelease(
           Effect.sync(() => {
@@ -1820,6 +1832,19 @@ describe("BrowserHost", { concurrent: false }, () => {
               if (active !== null && child.contains(active)) active.blur()
               return removeChild.call(this, child) as T
             }
+            proto.insertBefore = function<T extends Node>(
+              this: Node,
+              node: T,
+              child: Node | null
+            ) {
+              const active = document.activeElement as HTMLElement | null
+              if (
+                node.isConnected && active !== null && node.contains(active)
+              ) {
+                active.blur()
+              }
+              return insertBefore.call(this, node, child) as T
+            }
             close.mockImplementation(() =>
               document.getElementById("opener")!.focus()
             )
@@ -1827,6 +1852,7 @@ describe("BrowserHost", { concurrent: false }, () => {
           () =>
             Effect.sync(() => {
               proto.removeChild = removeChild
+              proto.insertBefore = insertBefore
               close.mockRestore()
               outside.remove()
             })
@@ -1855,10 +1881,16 @@ describe("BrowserHost", { concurrent: false }, () => {
         // Focus a new element moves as it's inserted.
         root.send(Item.Next())
         yield* tick
+        // A move takes the focused input out, then focus the moved element moves as it reconnects.
+        app.querySelector("input")!.focus()
+        root.send(Item.Next())
+        yield* tick
         expect(root.model()!.log).toEqual([
           "blur removed",
           "focusout removed",
           "focusout removed",
+          "focusout removed",
+          "focusout",
           "focusout removed",
           "focusout"
         ])

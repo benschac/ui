@@ -145,15 +145,18 @@ const isLeaving = (target: globalThis.Node): boolean =>
   )
 
 /**
- * Runs `f`, which takes `node` out of the document, or only its children
- * when `kept`. It counts only when focus was inside before `f`, so focus a
- * custom element's `connectedCallback` moves as it is first inserted doesn't.
+ * Runs `f`, which takes `node` out of the document: all of it, only its
+ * children, or, for a move, only the element that has focus, since the rest
+ * is back in by the time a custom element's `connectedCallback` moves focus.
+ * It counts only when focus was inside before `f`, so a first insertion
+ * doesn't.
  */
 const takingOut = (
   node: globalThis.Node,
-  kept: boolean,
+  scope: "node" | "children" | "focused",
   f: () => void
 ): void => {
+  const kept = scope === "children"
   const focused = node.isConnected
     ? (node.getRootNode() as Document | ShadowRoot).activeElement
     : null
@@ -161,7 +164,7 @@ const takingOut = (
     focused === null || focused === undefined || (kept && focused === node) ||
     !node.contains(focused)
   ) return f()
-  leaving.push({ node, kept })
+  leaving.push({ node: scope === "focused" ? focused : node, kept })
   try {
     f()
   } finally {
@@ -866,16 +869,16 @@ export const makeHost = (
     },
     insert(parent, node, before) {
       // Moving a node takes it out first.
-      takingOut(node, false, () => parent.insertBefore(node, before))
+      takingOut(node, "focused", () => parent.insertBefore(node, before))
     },
     remove(parent, node) {
-      takingOut(node, false, () => {
+      takingOut(node, "node", () => {
         if (shown.size > 0) closeShownIn(node, true)
         parent.removeChild(node)
       })
     },
     clear(parent) {
-      takingOut(parent, true, () => {
+      takingOut(parent, "children", () => {
         if (shown.size > 0) closeShownIn(parent, false)
         parent.textContent = ""
       })
