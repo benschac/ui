@@ -314,6 +314,25 @@ describe("Command", () => {
         Command.Issued<Component.Noop, Toggle, Component.Noop, "Effect">
       >()
       expect(SA.toLayer).type.not.toBeCallableWith(() => Effect.void)
+      // Only `Component.Noop` itself relaxes the body, as only it makes the runtime silent.
+      const serviceOf = <S extends Schema.Top>(success: S) =>
+        Command.Service<"Wrapped">()("Wrapped", {
+          args: {},
+          success,
+          error: Schema.Never
+        })
+      expect(serviceOf(Component.Noop).toLayer).type.toBeCallableWith(() =>
+        Effect.succeed(true)
+      )
+      expect(serviceOf(Schema.suspend(() => Component.Noop)).toLayer).type.not
+        .toBeCallableWith(() => Effect.succeed(true))
+      expect(serviceOf(Schema.Union([Component.Noop])).toLayer).type.not
+        .toBeCallableWith(() => Effect.succeed(true))
+      expect(serviceOf(Schema.declare(Component.isNoop)).toLayer).type.not
+        .toBeCallableWith(() => Effect.succeed(true))
+      expect(
+        serviceOf(Component.Noop.annotate({ description: "silent" })).toLayer
+      ).type.not.toBeCallableWith(() => Effect.succeed(true))
       expect(Either.toLayer).type.not.toBeCallableWith(() =>
         Effect.succeed(true)
       )

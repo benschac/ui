@@ -138,16 +138,52 @@ export interface Noop {
 }
 
 /**
+ * Identifies the `Component.Noop` Schema.
+ *
+ * @stability experimental
+ * @category type ids
+ * @since 0.1.0
+ */
+export const NoopSchemaTypeId = "~@effect/ui/Component/NoopSchema" as const
+
+/**
+ * Identifies the `Component.Noop` Schema.
+ *
+ * @stability experimental
+ * @category type ids
+ * @since 0.1.0
+ */
+export type NoopSchemaTypeId = typeof NoopSchemaTypeId
+
+/**
+ * The type of the `Component.Noop` Schema.
+ *
+ * **Details**
+ *
+ * A `Command.Service` whose `success` is this type ignores its body's
+ * result. A Schema built from `Component.Noop`, such as
+ * `Schema.suspend(() => Component.Noop)` or an annotated copy, isn't one, so
+ * its body returns `Component.noop` itself.
+ *
+ * @stability experimental
+ * @category models
+ * @since 0.1.0
+ */
+export interface NoopSchema extends Schema.declare<Noop> {
+  readonly [NoopSchemaTypeId]: NoopSchemaTypeId
+}
+
+/**
  * Schema for `Component.noop`.
  *
  * @stability experimental
  * @category schemas
  * @since 0.1.0
  */
-export const Noop: Schema.declare<Noop> = Schema.declare(internalNoop.isNoop, {
-  identifier: "Component.Noop",
-  [NoopTypeId]: NoopTypeId
-})
+export const Noop: NoopSchema = Object.assign(
+  Schema.declare(internalNoop.isNoop, { identifier: "Component.Noop" }),
+  { [NoopSchemaTypeId]: NoopSchemaTypeId } as const
+)
 
 /**
  * The message value that sends nothing.

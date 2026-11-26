@@ -1,11 +1,10 @@
 import * as Predicate from "effect/Predicate"
-import type * as Schema from "effect/Schema"
-import * as SchemaAST from "effect/SchemaAST"
-import type { Noop, NoopTypeId } from "../Component.ts"
+import type { Noop, NoopSchemaTypeId, NoopTypeId } from "../Component.ts"
 
-// The same string as `Component.NoopTypeId`, which the annotation checks. Declared here too so this module
-// needs `Component.ts` for types only.
+// The same strings as `Component.NoopTypeId` and `Component.NoopSchemaTypeId`. Declared here too so this
+// module needs `Component.ts` for types only.
 const TypeId: NoopTypeId = "~@effect/ui/Component/Noop"
+const SchemaTypeId: NoopSchemaTypeId = "~@effect/ui/Component/NoopSchema"
 
 /** @internal */
 export const noop: Noop = Object.freeze({ [TypeId]: TypeId })
@@ -20,9 +19,10 @@ export const isNoop = (u: unknown): u is Noop =>
   Predicate.hasProperty(u, TypeId) && u[TypeId] === TypeId
 
 /**
- * Recognises the `Component.Noop` schema by the type id it's annotated with, so an annotated copy counts.
+ * Recognises the `Component.Noop` Schema by the property `Component.NoopSchema` types, so the runtime silences
+ * exactly the Services whose `toLayer` takes any result. A Schema built from it, such as a `suspend`, has neither.
  *
  * @internal
  */
-export const isNoopSchema = (schema: Schema.Top): boolean =>
-  SchemaAST.resolveAt(TypeId)(schema.ast) === TypeId
+export const isNoopSchema = (u: unknown): boolean =>
+  Predicate.hasProperty(u, SchemaTypeId) && u[SchemaTypeId] === SchemaTypeId

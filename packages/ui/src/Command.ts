@@ -753,9 +753,9 @@ export interface Service<
   /** Builds a Layer providing this Command's implementation. */
   toLayer<LE = never, LR = never>(
     build:
-      | Service.Body<Args, Success["Type"], IsStream, Error["Type"]>
+      | Service.Body<Args, Success, IsStream, Error["Type"]>
       | Effect.Effect<
-        Service.Body<Args, Success["Type"], IsStream, Error["Type"]>,
+        Service.Body<Args, Success, IsStream, Error["Type"]>,
         LE,
         LR
       >
@@ -804,19 +804,23 @@ export declare namespace Service {
 
   /**
    * The body `toLayer` takes: an `Implementation` whose result may be
-   * anything when `A` is exactly `Component.Noop`, since `toLayer` then maps
-   * it to `Component.noop`.
+   * anything when `Success` is the `Component.Noop` Schema itself, since
+   * `toLayer` then maps it to `Component.noop`.
    *
    * @category models
    * @since 0.1.0
    */
-  export type Body<Args, A, IsStream extends boolean, Err = never> =
-    Implementation<
-      Args,
-      Types.EqualsWith<A, Component.Noop, unknown, A>,
-      IsStream,
-      Err
-    >
+  export type Body<
+    Args,
+    Success extends Schema.Top,
+    IsStream extends boolean,
+    Err = never
+  > = Implementation<
+    Args,
+    [Success] extends [Component.NoopSchema] ? unknown : Success["Type"],
+    IsStream,
+    Err
+  >
 
   /**
    * The options accepted by `Service`.
