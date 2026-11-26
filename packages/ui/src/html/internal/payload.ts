@@ -237,8 +237,9 @@ export const payloadOf = (
     case "focus":
       return { focusVisible: isFocusVisible(target) }
     case "blur":
-      // A window listener's `blur` has no element that lost focus.
-      return target === element
+      // A window listener's `blur` has no element that lost focus. A shadow
+      // host's has the element in its shadow root as `target`.
+      return event.target === element
         ? { disabled: isDisabled(target), removed }
         : {}
     case "focusin":

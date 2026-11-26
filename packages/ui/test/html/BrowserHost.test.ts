@@ -1814,6 +1814,10 @@ describe("BrowserHost", { concurrent: false }, () => {
                     )
                     : h.p.key(key)
                 )
+              ),
+              step === 6 && h.div.attr("id", "host").on(
+                "blur",
+                ({ removed }) => Item.Left({ event: "blur", removed })
               )
             )
         })
@@ -1829,7 +1833,27 @@ describe("BrowserHost", { concurrent: false }, () => {
           Effect.sync(() => {
             proto.removeChild = function<T extends Node>(this: Node, child: T) {
               const active = document.activeElement as HTMLElement | null
-              if (active !== null && child.contains(active)) active.blur()
+              const inner = active?.shadowRoot?.activeElement
+              if (active === null || !child.contains(active)) {
+                // Not focused.
+              } else if (inner === null || inner === undefined) active.blur()
+              else {
+                // happy-dom doesn't retarget an event from a shadow root to its host, so the host sends it.
+                const path: Array<EventTarget> = [inner, active.shadowRoot!]
+                for (let at: Node | null = active; at; at = at.parentNode) {
+                  path.push(at)
+                }
+                for (const type of ["blur", "focusout"]) {
+                  const event = new FocusEvent(type, {
+                    bubbles: type === "focusout",
+                    composed: true
+                  })
+                  Object.defineProperty(event, "composedPath", {
+                    value: () => [...path, window]
+                  })
+                  active.dispatchEvent(event)
+                }
+              }
               return removeChild.call(this, child) as T
             }
             proto.insertBefore = function<T extends Node>(
@@ -1887,6 +1911,15 @@ describe("BrowserHost", { concurrent: false }, () => {
         app.querySelector<HTMLElement>("x-focus-on-connect")!.focus()
         root.send(Item.Next())
         yield* tick
+        // A shadow host removed with focus inside its shadow root.
+        root.send(Item.Next())
+        yield* tick
+        const shadow = document.getElementById("host")!.attachShadow({
+          mode: "open"
+        })
+        shadow.appendChild(document.createElement("input")).focus()
+        root.send(Item.Next())
+        yield* tick
         expect(root.model()!.log).toEqual([
           "blur removed",
           "focusout removed",
@@ -1894,7 +1927,9 @@ describe("BrowserHost", { concurrent: false }, () => {
           "focusout removed",
           "focusout",
           "focusout removed",
-          "focusout"
+          "focusout",
+          "blur removed",
+          "focusout removed"
         ])
       }).pipe(Effect.scoped))
 
