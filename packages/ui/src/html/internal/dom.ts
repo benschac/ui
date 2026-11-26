@@ -119,33 +119,49 @@ const canonicalAttrs = (
 
 const ignore = () => {}
 
-// The focused elements a render is taking out of the document, which Chromium
-// blurs as they go, or a dialog closing around them moves focus from. Shared
-// by every host, because `BrowserHost` removes through one host while another
-// one listens.
-const leaving: Array<globalThis.Element> = []
+// The nodes a render is taking out of the document while focus is inside
+// them. Chromium blurs a focused element as it goes, and a dialog closing in
+// one can move focus to another element in it first. Shared by every host,
+// because `BrowserHost` removes through one host while another one listens.
+const leaving: Array<
+  { readonly node: globalThis.Node; readonly kept: boolean }
+> = []
+
+/** Whether `target` is `node` or inside it, through shadow roots. */
+const within = (node: globalThis.Node, target: globalThis.Node | null) => {
+  for (
+    let at = target;
+    at !== null;
+    at = at.parentNode ?? (at as ShadowRoot).host ?? null
+  ) {
+    if (at === node) return true
+  }
+  return false
+}
+
+const isLeaving = (target: globalThis.Node): boolean =>
+  leaving.some(({ kept, node }) =>
+    !(kept && target === node) && within(node, target)
+  )
 
 /**
  * Runs `f`, which takes `node` out of the document, or only its children
- * when `kept`. Only focus that was inside before `f` counts as removed, so
- * focus a custom element's `connectedCallback` moves doesn't.
+ * when `kept`. It counts only when focus was inside before `f`, so focus a
+ * custom element's `connectedCallback` moves as it is first inserted doesn't.
  */
 const takingOut = (
   node: globalThis.Node,
   kept: boolean,
   f: () => void
 ): void => {
-  let focused = node.isConnected
+  const focused = node.isConnected
     ? (node.getRootNode() as Document | ShadowRoot).activeElement
     : null
   if (
     focused === null || focused === undefined || (kept && focused === node) ||
     !node.contains(focused)
   ) return f()
-  while (focused.shadowRoot?.activeElement) {
-    focused = focused.shadowRoot.activeElement
-  }
-  leaving.push(focused)
+  leaving.push({ node, kept })
   try {
     f()
   } finally {
@@ -626,7 +642,7 @@ export const makeHost = (
       else composing.delete(target)
     }
     if (name === "dragstart") startDrag(event as DragEvent, path)
-    const removed = leaving.includes(target as globalThis.Element)
+    const removed = leaving.length > 0 && isLeaving(target)
     const handled = deliver(
       event,
       path,

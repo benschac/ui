@@ -1799,7 +1799,10 @@ describe("BrowserHost", { concurrent: false }, () => {
                 "blur",
                 ({ removed }) => Item.Left({ event: "blur", removed })
               ),
-              step === 2 && h.dialog.modal(true).children(h.input),
+              step === 2 && h.div(
+                h.button.attr("id", "opener"),
+                h.dialog.modal(true).children(h.input)
+              ),
               step === 4 && h.el("x-focus-on-connect").attr("tabindex", "0")
             )
         })
@@ -1817,7 +1820,9 @@ describe("BrowserHost", { concurrent: false }, () => {
               if (active !== null && child.contains(active)) active.blur()
               return removeChild.call(this, child) as T
             }
-            close.mockImplementation(() => outside.focus())
+            close.mockImplementation(() =>
+              document.getElementById("opener")!.focus()
+            )
           }),
           () =>
             Effect.sync(() => {
@@ -1841,7 +1846,7 @@ describe("BrowserHost", { concurrent: false }, () => {
         app.querySelector("button")!.focus()
         root.send(Item.Next())
         yield* tick
-        // A modal removed while its input has focus.
+        // A modal removed with its opener while its input has focus.
         root.send(Item.Next())
         yield* tick
         app.querySelector("input")!.focus()
@@ -1852,6 +1857,7 @@ describe("BrowserHost", { concurrent: false }, () => {
         yield* tick
         expect(root.model()!.log).toEqual([
           "blur removed",
+          "focusout removed",
           "focusout removed",
           "focusout removed",
           "focusout"
