@@ -1,9 +1,10 @@
 import * as Predicate from "effect/Predicate"
-import type { Noop, NoopTypeId } from "../Component.ts"
+import type { Noop, NoopSchemaTypeId, NoopTypeId } from "../Component.ts"
 
-// The same string as `Component.NoopTypeId`, which the annotation checks. Declared here too so this module
-// needs `Component.ts` for types only.
+// The same strings as `Component.NoopTypeId` and `Component.NoopSchemaTypeId`. Declared here too so this
+// module needs `Component.ts` for types only.
 const TypeId: NoopTypeId = "~@effect/ui/Component/Noop"
+const SchemaTypeId: NoopSchemaTypeId = "~@effect/ui/Component/NoopSchema"
 
 /** @internal */
 export const noop: Noop = Object.freeze({ [TypeId]: TypeId })
@@ -16,3 +17,12 @@ export const noop: Noop = Object.freeze({ [TypeId]: TypeId })
  */
 export const isNoop = (u: unknown): u is Noop =>
   Predicate.hasProperty(u, TypeId) && u[TypeId] === TypeId
+
+/**
+ * Checks the same property `Component.NoopSchema` types, so the runtime silences exactly the Services whose
+ * `toLayer` takes any result.
+ *
+ * @internal
+ */
+export const isNoopSchema = (u: unknown): boolean =>
+  Predicate.hasProperty(u, SchemaTypeId) && u[SchemaTypeId] === SchemaTypeId

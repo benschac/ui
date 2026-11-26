@@ -58,7 +58,7 @@ export class SaveSession extends Command.Service<SaveSession>()(
   "auth/SaveSession",
   {
     args: { session: Session },
-    success: AppMessage,
+    success: Schema.Union([AppMessage, Component.Noop]),
     error: Schema.Never
   }
 ) {
@@ -79,7 +79,7 @@ export class ClearSession extends Command.Service<ClearSession>()(
   "auth/ClearSession",
   {
     args: {},
-    success: AppMessage,
+    success: Schema.Union([AppMessage, Component.Noop]),
     error: Schema.Never
   }
 ) {

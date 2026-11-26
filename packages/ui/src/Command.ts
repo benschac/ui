@@ -6,7 +6,7 @@
  * and a story test can read what was issued without running anything. A
  * Command with nothing to tell the component ends with `Component.noop`, or
  * is piped through `Command.asNoop`, and sends nothing. A `Command.Service`
- * body may return `Component.noop` whatever its `success` is.
+ * with `success: Component.Noop` is always silent, whatever its body returns.
  *
  * Both constructors take a name and options with a required `args` Schema:
  *
@@ -24,10 +24,9 @@
  * `invalidates` means the run invalidates nothing.
  *
  * When one component consumes a Command's result, the usual case for an
- * app's own Commands, `success` is that component's Message Schema: the body
- * returns its message and handles a typed failure with `Effect.match`. A
- * body that leaves a typed error gives an `Unmatched` Command, which `$.run`
- * rejects.
+ * app's own Commands, the body returns that component's message and handles
+ * a typed failure with `Effect.match`. A body that leaves a typed error
+ * gives an `Unmatched` Command, which `$.run` rejects.
  *
  * `Command.match`, `Command.map` and `Command.asNoop` are for a Command that
  * can't know its caller's messages: one from a library, such as
@@ -754,9 +753,9 @@ export interface Service<
   /** Builds a Layer providing this Command's implementation. */
   toLayer<LE = never, LR = never>(
     build:
-      | Service.Implementation<Args, Success["Type"], IsStream, Error["Type"]>
+      | Service.Body<Args, Success, IsStream, Error["Type"]>
       | Effect.Effect<
-        Service.Implementation<Args, Success["Type"], IsStream, Error["Type"]>,
+        Service.Body<Args, Success, IsStream, Error["Type"]>,
         LE,
         LR
       >
@@ -793,16 +792,34 @@ export interface Service<
 export declare namespace Service {
   /**
    * The value behind a Command service: a function of the args struct that
-   * returns the body's result, or `Component.noop` for none. It may use
-   * framework services on each call.
+   * returns the body's result. It may use framework services on each call.
    *
    * @category models
    * @since 0.1.0
    */
   export type Implementation<Args, A, IsStream extends boolean, Err = never> =
     IsStream extends true ?
-      (args: Args) => Stream.Stream<A | Component.Noop, Err, FrameworkService>
-      : (args: Args) => Effect.Effect<A | Component.Noop, Err, FrameworkService>
+      (args: Args) => Stream.Stream<A, Err, FrameworkService>
+      : (args: Args) => Effect.Effect<A, Err, FrameworkService>
+
+  /**
+   * The body `toLayer` takes. Its result is `unknown` when `Success` is
+   * `Component.Noop`, since `toLayer` replaces it with `Component.noop`.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  export type Body<
+    Args,
+    Success extends Schema.Top,
+    IsStream extends boolean,
+    Err = never
+  > = Implementation<
+    Args,
+    [Success] extends [Component.NoopSchema] ? unknown : Success["Type"],
+    IsStream,
+    Err
+  >
 
   /**
    * The options accepted by `Service`.
@@ -811,16 +828,14 @@ export declare namespace Service {
    *
    * On top of `Options`:
    *
-   * - `success`: Schema for the body's result, usually the consuming
-   *   component's Message Schema. The body may also return `Component.noop`,
-   *   which `success` needn't include.
+   * - `success`: Schema for the body's result, or `Component.Noop` for a
+   *   silent Command.
    * - `error`: Schema for the body's typed failure, `Schema.Never` if none.
    * - `invalidates` is optional: what a run invalidates, from the args
    *   only, so it's known at issue. It's applied on every exit of a started
    *   run. Omitting it invalidates nothing.
    * - `optimistic` lists patches, from the args only, registered at issue.
-   * - `writes` lists the entries a success writes, none for
-   *   `Component.noop`. A Stream Command has none.
+   * - `writes` lists the entries a success writes. A Stream Command has none.
    *
    * @category models
    * @since 0.1.0
@@ -851,10 +866,6 @@ export declare namespace Service {
 type CommandOptions<In extends ArgsInput, G extends string> = Options<In, G>
 
 const identity = (result: any) => result
-
-/** `f`, skipped for `Component.noop`, which a mapper's type needn't include. */
-const skipNoop = (f: (a: any) => any) => (a: any) =>
-  internalNoop.isNoop(a) ? a : f(a)
 
 const variance = {
   _Msg: (_: never) => _,
@@ -1177,22 +1188,19 @@ export const make: {
  *
  * Takes a key (the Command's name in logs and stories) and options (`args`,
  * `success`, and `error`, which is `Schema.Never` when the body can't fail).
- * Attach the body with `toLayer`, passing a function or an Effect that runs once per Layer
+ * With `success: Component.Noop` every run is silent and the body may return
+ * anything, with no `Effect.as(Component.noop)`. Attach the body
+ * with `toLayer`, passing a function or an Effect that runs once per Layer
  * build to capture its dependencies; components then require only this class,
  * and tests can fake it with `X.toLayer(fn)`.
  *
  * The body may use framework services on each call without them appearing in
- * the Layer's requirements. When one component consumes the result, set
- * `success` to that component's Message Schema: the body returns its message
- * and handles a typed failure with `Effect.match`. A library or shared
- * Command returns its own result instead, and the issue site maps it:
- * `Command.match` when `error` isn't `Schema.Never`, since `make` then
- * issues an `Unmatched` Command, and `Command.map` or `Command.asNoop` when
- * it can't fail.
- *
- * Whatever `success` is, the body may return `Component.noop` when it has
- * nothing to report. The run then sends nothing: `writes`, `Command.map`
- * and `Command.match` never see it.
+ * the Layer's requirements. When one component consumes the result, the body
+ * returns that component's message and handles a typed failure with
+ * `Effect.match`. A library or shared Command returns its own result
+ * instead, and the issue site maps it: `Command.match` when `error` isn't
+ * `Schema.Never`, since `make` then issues an `Unmatched` Command, and
+ * `Command.map` or `Command.asNoop` when it can't fail.
  *
  * The options declare what a run does to the query cache, from the args:
  * `invalidates` (optional), `optimistic` patches, live from issue, and
@@ -1297,15 +1305,21 @@ export const Service: <Self>() => {
   const Base = Context.Service<any, any>()(key)
   const { error, invalidates, optimistic, stream, success, writes } = options
   const service = Base as Effect.Effect<(args: unknown) => any, never, any>
+  const silent = internalNoop.isNoopSchema(success)
+  const silence = (run: (args: any) => any) => (args: any) =>
+    stream
+      ? Stream.as(run(args), internalNoop.noop)
+      : Effect.as(run(args), internalNoop.noop)
   class CommandService extends Base {
     static readonly success = success
     static readonly error = error
     static toLayer(
       build: ((args: any) => any) | Effect.Effect<(args: any) => any, any, any>
     ): Layer.Layer<any, any, any> {
-      return Effect.isEffect(build)
-        ? Layer.effect(Base, build)
-        : Layer.succeed(Base, build)
+      if (Effect.isEffect(build)) {
+        return Layer.effect(Base, silent ? Effect.map(build, silence) : build)
+      }
+      return Layer.succeed(Base, silent ? silence(build) : build)
     }
   }
   return Object.assign(
@@ -1316,8 +1330,7 @@ export const Service: <Self>() => {
       optimistic: optimistic?.(args) ?? noTargets,
       writes: writes === undefined
         ? undefined
-        : (value) =>
-          internalNoop.isNoop(value) ? noTargets : writes(value, args),
+        : (value) => writes(value, args),
       work: stream
         ? Stream.unwrap(Effect.map(service, (run) => run(args)))
         : Effect.flatMap(service, (run) => run(args))
@@ -1343,9 +1356,6 @@ export const Service: <Self>() => {
  * Commands.
  *
  * **Gotchas**
- *
- * A result of `Component.noop` isn't mapped: `f` never receives it and the
- * run stays silent, so `as` can't give a silent Command a message.
  *
  * The pipeable form infers one `Source` and one `R` for its input, so it maps
  * one Command, or a union whose branches share them, and keeps them exact.
@@ -1385,11 +1395,10 @@ export const map: {
 } = dual(2, <A, R, B>(self: Command<A, R>, f: (a: A) => B): Command<B, R> => {
   if (self._tag === "Interrupt") return self
   const { reject, resolve } = self as unknown as Fields
-  const g = skipNoop(f)
   return makeIssued({
     ...(self as unknown as Fields),
-    resolve: (result) => g(resolve(result)),
-    reject: reject === undefined ? undefined : (error) => g(reject(error))
+    resolve: (result) => f(resolve(result)),
+    reject: reject === undefined ? undefined : (error) => f(reject(error))
   })
 })
 
@@ -1438,6 +1447,8 @@ export const as: {
  *
  * Use when a Command's result doesn't matter to the component, such as a
  * navigation or a focus, instead of adding a no-op variant to its Message. It's shorthand for `Command.as(Component.noop)`.
+ * A `Command.Service` that never has anything to report declares
+ * `success: Component.Noop` instead.
  *
  * **Details**
  *
@@ -1488,9 +1499,8 @@ export const asNoop = <C extends Command<any, any>>(
  *
  * `onSuccess` maps the body's success, or each element of a Stream Command,
  * and `onFailure` the typed failure, which ends a Stream Command. A defect or
- * an interrupt isn't mapped, and nor is a success of `Component.noop`. A
- * Command whose body can't fail takes `map`, and `match` on it doesn't
- * compile.
+ * an interrupt isn't mapped. A Command whose body can't fail takes `map`, and
+ * `match` on it doesn't compile.
  *
  * In a `Story` or `Scene` the mapping runs in the test: `resolve` takes the
  * body's success and `fail` its typed error. A Stream Command takes `next`
@@ -1544,7 +1554,7 @@ export const match: {
 }): any =>
   makeIssued({
     ...(self as unknown as Fields),
-    resolve: skipNoop(options.onSuccess),
+    resolve: options.onSuccess,
     reject: options.onFailure
   }))
 
