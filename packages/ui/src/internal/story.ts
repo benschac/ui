@@ -125,7 +125,10 @@ export interface Ack<Msg> {
 export interface LiveMount {
   /** The mount as the element last rendered it. */
   readonly mount: View.Mount<any>
-  /** The path of the part's owner for a part's mount, `undefined` for the element's own. */
+  /**
+   * The path of the part's owner for a part's mount, or of the child the scene runs for one of its
+   * elements' mounts, `undefined` for the element's own.
+   */
   readonly owner: string | undefined
   readonly element: View.Element<any, any>
   /** Whether `mounted` or `expectMount` named it. Until then it is work in flight. */
@@ -179,6 +182,8 @@ export type Fields<Props, Model, Msg, Events> =
     readonly collected?: Collected | undefined
     /** Listener state keyed by Subscription key, preserved across scene updates. */
     readonly held?: ReadonlyMap<string, unknown> | undefined
+    /** The children the scene runs, and their Models. See `Run`. */
+    readonly run?: Run | undefined
   }
 
 // What a failed slot without a `fallback` shows.
@@ -254,6 +259,8 @@ export const expansionOf = new WeakMap<
 export interface Expansion {
   readonly child: View.Child<any, any>
   readonly fallback: boolean
+  /** The child's path when the scene runs it: the nodes below are that child's own. */
+  readonly run?: string | undefined
 }
 
 /**
@@ -271,10 +278,14 @@ export const slotLengths = new WeakMap<
 const standsFor = (
   child: View.Child<any, any>,
   fallback: boolean,
-  inner: View.Node<any, any>
+  inner: View.Node<any, any>,
+  run?: string
 ): View.Node<any, any> => {
   const out = { ...inner } as View.Node<any, any>
-  expansionOf.set(out, [{ child, fallback }, ...(expansionOf.get(inner) ?? [])])
+  expansionOf.set(out, [
+    run === undefined ? { child, fallback } : { child, fallback, run },
+    ...(expansionOf.get(inner) ?? [])
+  ])
   const lengths = slotLengths.get(inner)
   if (lengths !== undefined) slotLengths.set(out, lengths)
   return out
@@ -292,6 +303,204 @@ export const sharedGiven = new WeakMap<
   object,
   ReadonlyMap<Component.Definition.Any, unknown>
 >()
+
+// -- children a scene runs ---------------------------------------------------
+// A scene leaves a child as a leaf unless `run` names its component. A child it runs shows its view
+// against its own Model, its handlers and mounts send to its own `update`, and its events reach the
+// component that wrote it through `onEmit`. No runtime is involved.
+
+/**
+ * The children a scene runs: the components `run` named, and the Model of each instance by its path.
+ *
+ * @internal
+ */
+export interface Run {
+  readonly components: ReadonlyArray<object>
+  readonly models: ReadonlyMap<string, unknown>
+}
+
+/** @internal */
+export const runOf = new WeakMap<object, Run>()
+
+/** One child the scene runs, as the view placed it. */
+interface Ran {
+  readonly child: View.Child<any, any>
+  readonly model: unknown
+  /** The path of the child the scene runs that wrote it, `undefined` for the story's component. */
+  readonly writer: string | undefined
+  readonly shared: Component.SharedLookup
+}
+
+// Every child an expansion ran, by the expanded root, by its path.
+const ranIn = new WeakMap<object, ReadonlyMap<string, Ran>>()
+const noneRan: ReadonlyMap<string, Ran> = new Map()
+
+const ranOf = (story: State<any, any, any, any>): ReadonlyMap<string, Ran> =>
+  ranIn.get(story.view()) ?? noneRan
+
+const runs = (run: Run, node: View.Child<any, any>): boolean =>
+  (node.component as { readonly parts?: unknown }).parts === undefined &&
+  run.components.some((component) => isChildOf(node, component))
+
+/**
+ * The path of the innermost child the scene runs that `node` is the root of, if any.
+ *
+ * @internal
+ */
+export const runPathOf = (node: View.Node<any, any>): string | undefined => {
+  let path: string | undefined
+  for (const each of expansionOf.get(node) ?? []) {
+    if (each.run !== undefined) path = each.run
+  }
+  return path
+}
+
+/** The child the scene runs that `handler` belongs to: the nearest run root at or above it in `path`. */
+const runOwner = (
+  path: ReadonlyArray<View.Node<any, any>>,
+  handler: View.Node<any, any>
+): string | undefined => {
+  for (let index = path.indexOf(handler); index < path.length; index++) {
+    const run = runPathOf(path[index]!)
+    if (run !== undefined) return run
+  }
+  return undefined
+}
+
+const unsupported = (
+  next: Component.Next<any, any, any, any>,
+  path: string,
+  step: string
+): void => {
+  if (next.commands.length > 0) {
+    throw new Error(
+      `${step}: ${path} started ${
+        next.commands.map((command) => command.name).join(", ")
+      }, and a scene doesn't run a child's Commands: test them in a Story of the child, or in a Play`
+    )
+  }
+  if ((next.lists?.length ?? 0) > 0) {
+    throw new Error(
+      `${step}: ${path} loaded more of a query, and a scene doesn't run a child's queries: test it in a Play`
+    )
+  }
+}
+
+/** Sends what a child the scene runs emitted to the one that wrote it, through the child's `onEmit`. */
+const toWriter = (
+  story: State<any, any, any, any>,
+  ran: Ran,
+  events: ReadonlyArray<unknown>,
+  step: string
+): State<any, any, any, any> => {
+  let out = story
+  for (const event of events) {
+    out = dispatchTo(out, ran.writer, ran.child.onEmit(event), step)
+  }
+  return out
+}
+
+/**
+ * Runs `message` through the `update` of the child the scene runs at `path`: its Model changes, its sends
+ * are the scene's to acknowledge with `sent`, and its events go to the component that wrote it.
+ *
+ * @internal
+ */
+export const dispatchRun = (
+  story: State<any, any, any, any>,
+  path: string,
+  message: unknown,
+  step: string
+): State<any, any, any, any> => {
+  if (message === undefined || isNoop(message)) return story
+  const ran = ranOf(story).get(path)
+  const run = runOf.get(story)
+  if (ran === undefined || run === undefined) {
+    throw new Error(`${step}: the scene runs no child at ${path}`)
+  }
+  const child = ran.child.component as unknown as Component.Component<
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    any,
+    never
+  >
+  const next = child.update(
+    ran.model,
+    message,
+    ran.child.props,
+    undefined,
+    sharedReads.record(child, ran.shared)
+  )
+  unsupported(next, path, step)
+  let out = update(story, {
+    run: { ...run, models: new Map(run.models).set(path, next.model) }
+  })
+  // The owners a child sends to are headless, and a scene doesn't run their `update`.
+  const sends = next.sends?.filter((send) => delivered(out, send)) ?? []
+  if (sends.length > 0) out = update(out, { sent: [...out.sent, ...sends] })
+  return toWriter(out, ran, next.events, step)
+}
+
+/**
+ * Sends `message` to the child the scene runs at `path`, or to the story's component when `path` names
+ * none.
+ *
+ * @internal
+ */
+export const dispatchTo = (
+  story: State<any, any, any, any>,
+  path: string | undefined,
+  message: unknown,
+  step: string
+): State<any, any, any, any> =>
+  path !== undefined && ranOf(story).has(path)
+    ? dispatchRun(story, path, message, step)
+    : dispatch(story, message)
+
+/**
+ * Starts the children the scene runs that the view placed since the last step, and ends those it no
+ * longer places, as the runtime mounts and unmounts them. A child starts with its `init`, whose events go
+ * to the component that wrote it.
+ *
+ * @internal
+ */
+export const syncRun = (
+  story: State<any, any, any, any>,
+  step: string
+): State<any, any, any, any> => {
+  let out = story
+  // loop: a child's `init` events can place more children, so it runs until nothing new is placed.
+  for (let round = 0; round < 100; round++) {
+    const run = runOf.get(out)
+    if (run === undefined) return out
+    const ran = ranOf(out)
+    const fresh = [...ran].filter(([path]) => !run.models.has(path))
+    const gone = [...run.models.keys()].filter((path) => !ran.has(path))
+    if (fresh.length === 0 && gone.length === 0) return out
+    const models = new Map(run.models)
+    for (const path of gone) models.delete(path)
+    const started = fresh.map(([path, each]) => {
+      const first = (each.child.component as unknown as Component.Any).init(
+        each.child.props
+      )
+      unsupported(first, path, step)
+      models.set(path, first.model)
+      return [each, first.events] as const
+    })
+    out = update(out, { run: { ...run, models } })
+    for (const [each, events] of started) {
+      out = toWriter(out, each, events, step)
+    }
+  }
+  throw new Error(
+    `${step}: the children the scene runs keep placing new children`
+  )
+}
 
 // -- shared state -----------------------------------------------------------
 // The owners above a point in the story's view, nearest last: their values as the readers there see them.
@@ -535,10 +744,12 @@ const expandRoot = <Msg>(
   root: Owners,
   status: ReadonlyMap<string, SlotResult> | undefined,
   slotStatus: SlotResult | undefined,
-  author: Pick<Fields<any, any, any, any>, "model" | "props" | "results">
+  author: Pick<Fields<any, any, any, any>, "model" | "props" | "results">,
+  run: Run | undefined
 ): View.Node<Msg, any> => {
   const replaced: Array<View.Child<any, any>> = []
   const placed: Array<Occurrence> = []
+  const ran = new Map<string, Ran>()
   // As the runtime does: two children at one path fail the view or the closure that holds them, and the
   // view and the closures it gives its headless children can't place one slot twice between them.
   const written = [checkChildPaths("/" + name, view)]
@@ -546,20 +757,23 @@ const expandRoot = <Msg>(
   // `own`: the story's component wrote it, so its slots count with the component's. Content the story
   // passed for its slots was written by a parent, and so were the closures in it.
   // `reads`: what the feature slots there read, if their services aren't ready. See `Fields.slotStatus`.
+  // `writer`: the path of the child the scene runs whose view wrote the node, `undefined` for the
+  // story's component.
   const content = (
     input: View.Input<any, any>,
     path: string,
     depth: number,
     own: boolean,
     owners: Owners,
-    reads: SlotResult | undefined
+    reads: SlotResult | undefined,
+    writer: string | undefined
   ) => {
     const nodes = View.children([input])
     const paths = checkContentPaths(path, nodes)
     if (own) written.push(paths)
     const scope = (label: string) => checkContentPaths(label, nodes)
     return nodes.map((child) =>
-      expand(child, path, depth, own, owners, scope, reads)
+      expand(child, path, depth, own, owners, scope, reads, writer)
     )
   }
   const expand = (
@@ -569,7 +783,8 @@ const expandRoot = <Msg>(
     own: boolean,
     owners: Owners,
     scope: (label: string) => ChildPaths,
-    reads: SlotResult | undefined
+    reads: SlotResult | undefined,
+    writer: string | undefined
   ): View.Node<any, any> => {
     switch (node._tag) {
       case "Text":
@@ -577,7 +792,7 @@ const expandRoot = <Msg>(
       case "Outlet": {
         // The story's component placing a slot: it shows what the story passed. Mounted under the slot,
         // the content reads the owners above the story, not those around the outlet.
-        const input = filled?.[node.name]
+        const input = writer === undefined ? filled?.[node.name] : undefined
         if (input === undefined) return node
         return {
           ...node,
@@ -587,6 +802,7 @@ const expandRoot = <Msg>(
             1,
             false,
             root,
+            undefined,
             undefined
           )
         } as View.Node<
@@ -597,7 +813,16 @@ const expandRoot = <Msg>(
       case "Element": {
         let changed = false
         const children = node.children.map((child) => {
-          const next = expand(child, path, depth, own, owners, scope, reads)
+          const next = expand(
+            child,
+            path,
+            depth,
+            own,
+            owners,
+            scope,
+            reads,
+            writer
+          )
           if (next !== child) changed = true
           return next
         })
@@ -630,8 +855,50 @@ const expandRoot = <Msg>(
           return standsFor(
             node,
             true,
-            expand(shown, path, depth, own, owners, scope, undefined)
+            expand(shown, path, depth, own, owners, scope, undefined, writer)
           )
+        }
+        if (run !== undefined && runs(run, node)) {
+          // A child the scene runs shows its own view, against its Model, and the nodes in it are its own.
+          const child = node.component as unknown as Component.Any
+          if (node.slots !== undefined) {
+            throw new Error(
+              `Scene: ${childPath} is passed slots, and a scene doesn't run a child with slots`
+            )
+          }
+          if (boundOf(child) !== undefined) {
+            throw new Error(
+              `Scene: ${childPath} reads queries, and a scene doesn't run a child's queries: test it in a Play`
+            )
+          }
+          replaced.push(node)
+          const model = run.models.has(childPath)
+            ? run.models.get(childPath)
+            : child.init(node.props).model
+          const lookup = sharedLookup(shared, owners)
+          ran.set(childPath, { child: node, model, writer, shared: lookup })
+          const tree = View.toNode(
+            child.view(
+              model,
+              node.props,
+              () => false,
+              undefined,
+              childPath,
+              lookup
+            )
+          )
+          checkChildPaths(childPath, tree)
+          const inner = expand(
+            tree,
+            childPath,
+            depth + 1,
+            false,
+            ownersBelow(shared, owners, child, model, node.props),
+            (label) => checkChildPaths(label, tree),
+            reads,
+            childPath
+          )
+          return standsFor(node, false, inner, childPath)
         }
         if (node.slots !== undefined) {
           // A child's view isn't run, but what the parent passed for its slots is the parent's.
@@ -644,7 +911,8 @@ const expandRoot = <Msg>(
               depth + 1,
               own,
               owners,
-              reads
+              reads,
+              writer
             )
             shown.push(...placed)
             lengths.push([slot, placed.length])
@@ -675,7 +943,8 @@ const expandRoot = <Msg>(
           own,
           ownersBelow(shared, owners, component, model, node.props),
           (label) => checkChildPaths(label, tree),
-          reads
+          reads,
+          writer
         )
         return standsFor(node, false, inner)
       }
@@ -688,11 +957,13 @@ const expandRoot = <Msg>(
     true,
     root,
     (label) => checkChildPaths(label, view),
-    slotStatus
+    slotStatus,
+    undefined
   )
   checkAuthorPlacements("/" + name, written)
   checkAuthorWrites("/" + name, written)
   if (replaced.length > 0) expandedChildren.set(expanded, replaced)
+  if (ran.size > 0) ranIn.set(expanded, ran)
   // A root the expansion left as it was may be a node the component cached and another story shows,
   // and its children are all declared by the view itself, so it keeps nothing.
   if (expanded !== view) occurrences.set(expanded, placed)
@@ -784,6 +1055,7 @@ export const record = <Props, Model, Msg, Events>(
   if (fields.shared !== undefined) sharedGiven.set(story, fields.shared)
   if (fields.collected !== undefined) collectedLast.set(story, fields.collected)
   if (fields.held !== undefined) heldBy.set(story, fields.held)
+  if (fields.run !== undefined) runOf.set(story, fields.run)
   return story
 }
 
@@ -810,6 +1082,7 @@ export const update = <Props, Model, Msg, Events>(
     shared: sharedGiven.get(story),
     collected: collectedLast.get(story),
     held: heldBy.get(story),
+    run: runOf.get(story),
     ...patch
   }
   // A defect in `view` fails the step that changed the Model, the query results, the props or what's pending.
@@ -822,7 +1095,8 @@ export const update = <Props, Model, Msg, Events>(
       fields.loadingMore === story.loadingMore &&
       fields.childModels === childModels.get(story) &&
       fields.childStatus === childStatuses.get(story) &&
-      fields.shared === sharedGiven.get(story)
+      fields.shared === sharedGiven.get(story) &&
+      fields.run === runOf.get(story)
       ? story.view
       : () => expandedView(fields)
   return record(fields, view)
@@ -851,7 +1125,8 @@ export const expandedView = (
     ),
     fields.childStatus,
     fields.slotStatus,
-    fields
+    fields,
+    fields.run
   )
 
 /**
@@ -1942,14 +2217,21 @@ export const tryFireNode = <Props, Model, Msg, Events>(
   step: string,
   description: string
 ): Fired<Props, Model, Msg, Events> | ChildOnly | undefined => {
-  const handler = handlerOn(ancestry(story, node), event)
+  const path = ancestry(story, node)
+  const handler = handlerOn(path, event)
   if (handler === undefined) return undefined
   // A scene runs its own component's layers: the element's handlers, and in an author's scene the
   // parts' layers it owns, wherever its view applied them. A headless child's layer needs the child's `update`.
+  // An element of a child the scene runs is that child's, and its handler sends to the child's `update`.
+  const ran = runOwner(path, handler)
   const own = "/" + story.component.definition.name
   const owned = handler.owned ?? []
-  const layers = [...owned.filter((layer) => layer.owner.path === own), handler]
-    .filter((layer) => Object.hasOwn(layer.handlers, event))
+  const layers = [
+    ...(ran === undefined
+      ? owned.filter((layer) => layer.owner.path === own)
+      : []),
+    handler
+  ].filter((layer) => Object.hasOwn(layer.handlers, event))
   // `"always"` from any layer cancels, a child's included.
   const always = [...owned, handler].some((layer) =>
     layer.eventOptions[event]?.preventDefault === "always"
@@ -1983,8 +2265,10 @@ export const tryFireNode = <Props, Model, Msg, Events>(
     if (options?.capturePointer === true && event === "pointerdown") {
       captured = handler as Locator.Node
     }
-    // Every layer here is the scene's own component's, so each message is the scene's.
-    out = dispatch(out, message as Msg)
+    // Every layer here is the scene's own component's, or the run child's, so each message is theirs.
+    out = ran === undefined
+      ? dispatch(out, message as Msg)
+      : dispatchRun(out, ran, message, step)
   }
   return { story: out, prevented, handled, captured }
 }

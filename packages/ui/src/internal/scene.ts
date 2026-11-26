@@ -346,17 +346,20 @@ const followMounts = (
         { ...kept, mount, element }
     )
   }
+  // `ran`: the path of the child the scene runs whose view holds the node. Its elements' mounts are its own.
   const walk = (
     old: View.Node<any, any> | undefined,
     node: View.Node<any, any>,
-    authored: boolean
+    authored: boolean,
+    outer: string | undefined
   ): void => {
+    const ran = engine.runPathOf(node) ?? outer
     if (node._tag === "Element") {
       const olds = old === undefined
         ? []
         : before.get(old as View.Element<any, any>) ?? []
-      if (authored && node.mount !== undefined) {
-        follow(node.mount, undefined, node, olds)
+      if ((authored || ran !== undefined) && node.mount !== undefined) {
+        follow(node.mount, ran, node, olds)
       }
       for (const layer of node.owned ?? []) {
         if (layer.mount !== undefined && layer.owner.path === own) {
@@ -368,7 +371,7 @@ const followMounts = (
     const below = authored && node._tag !== "Outlet"
     if (old === undefined) {
       // Nothing to match against: every mount below is new.
-      for (const child of childrenOf(node)) walk(undefined, child, below)
+      for (const child of childrenOf(node)) walk(undefined, child, below, ran)
       return
     }
     const oldGroups = groups(old)
@@ -383,7 +386,8 @@ const followMounts = (
         walk(
           was !== undefined && continues(was, child) ? was : undefined,
           child,
-          below
+          below,
+          ran
         )
       })
     }
@@ -393,7 +397,8 @@ const followMounts = (
   walk(
     root !== undefined && continues(root, tree) ? root : undefined,
     tree,
-    true
+    true,
+    undefined
   )
   return {
     mounts,
@@ -524,7 +529,7 @@ export class SceneCursor extends Cursor {
     step: string
   ): engine.State<any, any, any, any> {
     // Rendered once the step has settled, so a defect in `view` fails it.
-    return trackMounts(state, step)
+    return trackMounts(engine.syncRun(state, step), step)
   }
 
   /**
@@ -670,7 +675,9 @@ export class SceneCursor extends Cursor {
     step: string
   ): engine.State<any, any, any, any> {
     // Another `shared` step may give a value the view still misses.
-    return engine.renderSharing(state) ? trackMounts(state, step) : state
+    return engine.renderSharing(state)
+      ? trackMounts(engine.syncRun(state, step), step)
+      : state
   }
   mounted(
     target: Mount.Definition.Any | Mount.Any,
@@ -690,13 +697,16 @@ export class SceneCursor extends Cursor {
     const message = (live.mount.resolve as (result: unknown) => unknown)(
       result.length === 0 ? noop : result[0]
     )
+    // A mount of a child the scene runs ends in that child's `update`.
     return this.act(
       "mounted",
       "acting",
       (state) =>
-        engine.dispatch(
+        engine.dispatchTo(
           withMount(state, live, { ...live, acknowledged: true, ended: true }),
-          message
+          live.owner,
+          message,
+          step
         )
     )
   }
@@ -877,17 +887,26 @@ export const begin = <S extends SceneCursor>(
     readonly elements?: View.Vocabulary<any> | undefined
     readonly slots?: ((h: any) => any) | undefined
     readonly view?: ((parts: any, h: any) => View.Content<any, any>) | undefined
+    readonly run?: ReadonlyArray<object> | undefined
   }
 ): S => {
-  const made = options === undefined
-    ? component
-    : options.slots !== undefined
+  const made = options?.slots !== undefined
     ? engine.withSlots(component, options.slots, options.elements)
-    : engine.withView(component, options.view!, options.elements)
-  const state = cursor.initial(made, props)
+    : options?.view !== undefined
+    ? engine.withView(component, options.view, options.elements)
+    : component
+  const initial = cursor.initial(made, props)
+  const state = options?.run === undefined
+    ? initial
+    : engine.update(initial, {
+      run: { components: options.run, models: new Map() }
+    })
+  const step = `${module}.start`
   // A missing shared value can't be given before the first step.
   return new Ctor(
     module,
-    engine.renderSharing(state) ? trackMounts(state, `${module}.start`) : state
+    engine.renderSharing(state)
+      ? trackMounts(engine.syncRun(state, step), step)
+      : state
   )
 }
