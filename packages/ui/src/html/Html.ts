@@ -627,7 +627,9 @@ export interface FocusPayload {
  *
  * `removed` is `true` only when a render removes or moves the element, or
  * one around it, while it has focus. Chromium sends `blur` for that, and
- * Firefox and Safari don't. A host other than the browser may leave it out.
+ * Firefox and Safari don't. It is also `true` when a removed dialog around
+ * the element moves focus away as it closes. A host other than the browser
+ * may leave it out.
  *
  * @stability experimental
  * @category events

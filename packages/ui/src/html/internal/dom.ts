@@ -119,22 +119,39 @@ const canonicalAttrs = (
 
 const ignore = () => {}
 
-// The nodes a render is taking out of the document. Chromium blurs a focused
-// element in one as it goes. Shared by every host, because `BrowserHost`
-// removes through one host while another one listens.
-const leaving: Array<globalThis.Node> = []
+// The focused elements a render is taking out of the document, which Chromium
+// blurs as they go, or a dialog closing around them moves focus from. Shared
+// by every host, because `BrowserHost` removes through one host while another
+// one listens.
+const leaving: Array<globalThis.Element> = []
 
-const takingOut = (node: globalThis.Node, f: () => void): void => {
-  leaving.push(node)
+/**
+ * Runs `f`, which takes `node` out of the document, or only its children
+ * when `kept`. Only focus that was inside before `f` counts as removed, so
+ * focus a custom element's `connectedCallback` moves doesn't.
+ */
+const takingOut = (
+  node: globalThis.Node,
+  kept: boolean,
+  f: () => void
+): void => {
+  let focused = node.isConnected
+    ? (node.getRootNode() as Document | ShadowRoot).activeElement
+    : null
+  if (
+    focused === null || focused === undefined || (kept && focused === node) ||
+    !node.contains(focused)
+  ) return f()
+  while (focused.shadowRoot?.activeElement) {
+    focused = focused.shadowRoot.activeElement
+  }
+  leaving.push(focused)
   try {
     f()
   } finally {
     leaving.pop()
   }
 }
-
-const isLeaving = (target: globalThis.Node): boolean =>
-  leaving.some((node) => node.contains(target))
 
 type Node = globalThis.Node & { $r?: Kernel.Rec }
 
@@ -609,6 +626,7 @@ export const makeHost = (
       else composing.delete(target)
     }
     if (name === "dragstart") startDrag(event as DragEvent, path)
+    const removed = leaving.includes(target as globalThis.Element)
     const handled = deliver(
       event,
       path,
@@ -629,7 +647,7 @@ export const makeHost = (
             target,
             node as globalThis.Element,
             lastPointer,
-            leaving.length > 0 && isLeaving(target)
+            removed
           )
     )
     if (
@@ -832,15 +850,19 @@ export const makeHost = (
     },
     insert(parent, node, before) {
       // Moving a node takes it out first.
-      takingOut(node, () => parent.insertBefore(node, before))
+      takingOut(node, false, () => parent.insertBefore(node, before))
     },
     remove(parent, node) {
-      if (shown.size > 0) closeShownIn(node, true)
-      takingOut(node, () => parent.removeChild(node))
+      takingOut(node, false, () => {
+        if (shown.size > 0) closeShownIn(node, true)
+        parent.removeChild(node)
+      })
     },
     clear(parent) {
-      if (shown.size > 0) closeShownIn(parent, false)
-      takingOut(parent, () => (parent.textContent = ""))
+      takingOut(parent, true, () => {
+        if (shown.size > 0) closeShownIn(parent, false)
+        parent.textContent = ""
+      })
     },
     parentOf: (node) => node.parentNode!,
     nextOf: (node) => node.nextSibling,

@@ -1772,38 +1772,44 @@ describe("BrowserHost", { concurrent: false }, () => {
       Effect.gen(function*() {
         const Item = UiSchema.TaggedEnum({
           Left: { event: Schema.String, removed: Schema.Boolean },
-          Rekeyed: {}
+          Next: {}
         })
         const Items = Html.component({
           name: "Items",
           model: Schema.Struct({
-            key: Schema.String,
+            step: Schema.Number,
             log: Schema.Array(Schema.String)
           }),
           message: Item
         }).make({
-          init: () => ({ key: "a", log: [] as ReadonlyArray<string> }),
+          init: () => ({ step: 0, log: [] as ReadonlyArray<string> }),
           update: {
             Left: ($, { event, removed }) =>
               $.evolve({
                 log: [...$.model.log, `${event}${removed ? " removed" : ""}`]
               }),
-            Rekeyed: ($) => $.evolve({ key: "b" })
+            Next: ($) => $.evolve({ step: $.model.step + 1 })
           },
-          view: (h, { key }) =>
+          view: (h, { step }) =>
             h.div.on(
               "focusout",
               ({ removed }) => Item.Left({ event: "focusout", removed })
             ).children(
-              h.button.key(key).on(
+              step < 2 && h.button.key(String(step)).on(
                 "blur",
                 ({ removed }) => Item.Left({ event: "blur", removed })
-              )
+              ),
+              step === 2 && h.dialog.modal(true).children(h.input),
+              step === 4 && h.el("x-focus-on-connect").attr("tabindex", "0")
             )
         })
-        // Chromium blurs a focused element as it leaves the document. happy-dom doesn't.
+        const outside = document.body.appendChild(
+          document.createElement("button")
+        )
+        // Chromium blurs a focused element as it leaves the document, and a closing modal returns focus. happy-dom does neither.
         const proto = window.Node.prototype
         const removeChild = proto.removeChild
+        const close = vi.spyOn(window.HTMLDialogElement.prototype, "close")
         yield* Effect.acquireRelease(
           Effect.sync(() => {
             proto.removeChild = function<T extends Node>(this: Node, child: T) {
@@ -1811,21 +1817,43 @@ describe("BrowserHost", { concurrent: false }, () => {
               if (active !== null && child.contains(active)) active.blur()
               return removeChild.call(this, child) as T
             }
+            close.mockImplementation(() => outside.focus())
           }),
-          () => Effect.sync(() => (proto.removeChild = removeChild))
+          () =>
+            Effect.sync(() => {
+              proto.removeChild = removeChild
+              close.mockRestore()
+              outside.remove()
+            })
+        )
+        customElements.define(
+          "x-focus-on-connect",
+          class extends HTMLElement {
+            connectedCallback() {
+              this.focus()
+              outside.focus()
+            }
+          }
         )
         const app = yield* container
         const root = yield* BrowserHost.mountEffect(Items, {}, app)
+        // A re-keyed button.
         app.querySelector("button")!.focus()
-        root.send(Item.Rekeyed())
+        root.send(Item.Next())
         yield* tick
-        app.querySelector("button")!.focus()
-        app.querySelector("button")!.blur()
+        // A modal removed while its input has focus.
+        root.send(Item.Next())
+        yield* tick
+        app.querySelector("input")!.focus()
+        root.send(Item.Next())
+        yield* tick
+        // Focus a new element moves as it's inserted.
+        root.send(Item.Next())
         yield* tick
         expect(root.model()!.log).toEqual([
           "blur removed",
           "focusout removed",
-          "blur",
+          "focusout removed",
           "focusout"
         ])
       }).pipe(Effect.scoped))
