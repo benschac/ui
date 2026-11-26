@@ -121,8 +121,8 @@ const ignore = () => {}
 
 // The nodes a render is taking out of the document while focus is inside
 // them. Chromium blurs a focused element as it goes, and a dialog closing in
-// one can move focus to another element in it first. Shared by every host,
-// because `BrowserHost` removes through one host while another one listens.
+// one can first move focus elsewhere in it. Module-level, because
+// `BrowserHost` removes through one host while another one listens.
 const leaving: Array<
   { readonly node: globalThis.Node; readonly kept: boolean }
 > = []
@@ -134,12 +134,11 @@ const isLeaving = (path: ReadonlyArray<globalThis.Node>): boolean =>
   )
 
 /**
- * Runs `f`, which takes `node` out of the document, or only its children
- * when `kept`. It counts only when focus was inside before `f`, so a first
- * insertion doesn't. A move (`moved`) counts only until focus is back
- * inside, so focus a custom element's `connectedCallback` takes and then
- * moves out is a real exit. That is `focus`, not `focusin`, which a
- * `focus` handler moving focus on comes after.
+ * Runs `f`, which takes `node` (or, when `kept`, only its children) out of
+ * the document, marking it as leaving if focus is inside. A move's mark ends
+ * once focus is back inside, so a `connectedCallback` that then sends focus
+ * out is a real exit. It listens for `focus` in capture, because a `focus`
+ * handler can move focus on before `focusin` fires.
  */
 const takingOut = (
   node: globalThis.Node,
