@@ -421,12 +421,7 @@ export const handlers = (server: Backend) => {
   const arrival = (session: Inspector.Session, seq: number) => {
     if ((server.history.latest(session.id) ?? -1) < seq) return undefined
     if (session.resolve(seq)._tag !== "Outside") return "seen"
-    const first = session.entries()[0]?.seq
-    return first !== undefined && seq < first
-      ? "evicted"
-      : server.history.skipped(session.id, seq)
-      ? "skipped"
-      : "excluded"
+    return server.history.missing(session.id, seq)
   }
 
   const ask = (session: Inspector.Session, request: Control.Request) =>

@@ -128,9 +128,13 @@ const until = (check: () => boolean) =>
       : Effect.andThen(wait(10), Effect.suspend(loop))
   }).pipe(Effect.timeout("2 seconds"))
 
-const serveFast = Effect.fnUntraced(function*(port: number, timeout: number) {
+const serveFast = Effect.fnUntraced(function*(
+  port: number,
+  timeout: number,
+  size = 100
+) {
   const { routes, server } = Server.make({
-    size: 100,
+    size,
     dispatch: true,
     keep: 5,
     timeout
@@ -959,33 +963,51 @@ describe("DevToolsServer", { concurrent: false }, () => {
   )
 
   it.live(
-    "reports a dispatched entry the server will never hold when a later frame arrives",
+    "reports a dispatched entry the server will never hold when a later frame arrives, inside or before the kept window",
     () =>
       Effect.gen(function*() {
-        const { agent, url } = yield* serveFast(47753, 1_000)
-        yield* fakePage(url, (log) =>
-          Effect.sync(() => {
-            log.send(propsAt(3))
-            return { _tag: "Updated", seq: 2 } as const
-          }))
+        const { agent, url } = yield* serveFast(47753, 1_000, 1)
+        let first = true
+        yield* fakePage(url, (log) => {
+          // Seq 2 is kept as the hidden baseline of 4, so 3 is inside the window.
+          if (first) {
+            first = false
+            log.send(updateAt(2, true))
+            log.send(propsAt(4))
+            return Effect.succeed({ _tag: "Updated", seq: 3 } as const)
+          }
+          log.send(propsAt(5))
+          log.send(propsAt(6))
+          return Effect.as(wait(100), { _tag: "Updated", seq: 5 } as const)
+        })
         const sent = yield* agent.call("dispatch", {
           session: "s",
           instance: 1,
           messages: go(1)
         })
-        assert.deepStrictEqual(sent.outcomes, [{ _tag: "Updated", seq: 2 }])
+        assert.deepStrictEqual(sent.outcomes, [{ _tag: "Updated", seq: 3 }])
         assert.deepStrictEqual(sent.unavailable, [{
-          seq: 2,
+          seq: 3,
           reason: "skipped"
         }])
         assert.isUndefined(sent.unseen)
         assert.include(
           sent.note,
-          "#2 were logged by the page, but the server can't show them"
+          "#3 were logged by the page, but the server can't show them"
         )
-        yield* agent.fails("get_entry", { session: "s", seq: 2 })
-        const shown = yield* agent.call("get_entry", { session: "s", seq: 3 })
+        yield* agent.fails("get_entry", { session: "s", seq: 3 })
+        const shown = yield* agent.call("get_entry", { session: "s", seq: 4 })
         assert.strictEqual(shown._tag, "PropsChanged")
+
+        const old = yield* agent.call("dispatch", {
+          session: "s",
+          instance: 1,
+          messages: go(1)
+        })
+        assert.deepStrictEqual(old.unavailable, [{
+          seq: 5,
+          reason: "evicted"
+        }])
       }).pipe(Effect.scoped),
     30_000
   )

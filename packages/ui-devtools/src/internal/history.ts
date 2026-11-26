@@ -22,8 +22,14 @@ export interface History {
   readonly entry: (session: string, seq: number) => Entry | undefined
   /** The last seq recorded, shown or not. */
   readonly latest: (session: string) => number | undefined
-  /** Whether a seq never arrived, while later ones did. */
-  readonly skipped: (session: string, seq: number) => boolean
+  /**
+   * Why a seq up to `latest` isn't held: older than every entry kept, in a
+   * range that never arrived, or else an excluded update replaced since.
+   */
+  readonly missing: (
+    session: string,
+    seq: number
+  ) => "evicted" | "skipped" | "excluded"
   readonly at: (session: string, seq: number) => State | undefined
   readonly instanceAt: (
     session: string,
@@ -149,8 +155,12 @@ const makeSession = (size: number) => {
     entry: (seq: number) =>
       shown.get(seq) ?? entries.find((entry) => entry.seq === seq),
     latest: () => last,
-    skipped: (seq: number) =>
-      gaps.some(([from, to]) => from <= seq && seq <= to),
+    missing: (seq: number) =>
+      seq <= floor
+        ? "evicted" as const
+        : gaps.some(([from, to]) => from <= seq && seq <= to)
+        ? "skipped" as const
+        : "excluded" as const,
     at: (seq: number): State => {
       const states = fold(seq)
       const byPath = new Map<string, BrowserHost.Recorded>()
@@ -213,7 +223,7 @@ export const make = (size: number): History => {
     holds: (session, seq) => sessions.get(session)?.holds(seq) ?? false,
     entry: (session, seq) => sessions.get(session)?.entry(seq),
     latest: (session) => sessions.get(session)?.latest(),
-    skipped: (session, seq) => sessions.get(session)?.skipped(seq) ?? false,
+    missing: (session, seq) => sessions.get(session)?.missing(seq) ?? "evicted",
     at: (session, seq) => {
       const held = sessions.get(session)
       return held === undefined || !held.holds(seq) ? undefined : held.at(seq)
