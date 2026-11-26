@@ -147,7 +147,8 @@ export class CreateAccount extends Command.Service<CreateAccount>()(
       email: Schema.String,
       password: Schema.Redacted(Schema.String)
     },
-    success: SignupFormMessage
+    success: SignupFormMessage,
+    error: Schema.Never
   }
 ) {
   static readonly layer = this.toLayer(

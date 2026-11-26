@@ -25,6 +25,7 @@ class SaveNote extends Command.Service<SaveNote>()(
       token: Schema.Redacted(Schema.String)
     },
     success: EditorMessage,
+    error: Schema.Never,
     group: ["noteId"],
     mode: "switch"
   }

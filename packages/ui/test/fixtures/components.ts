@@ -65,7 +65,12 @@ const encodeTodo = Schema.encodeSync(Schema.fromJsonString(Todo))
 
 export class SaveTodo extends Command.Service<SaveTodo>()(
   "todos/SaveTodo",
-  { args: Todo, success: TodoItemMessage, invalidates: () => [] }
+  {
+    args: Todo,
+    success: TodoItemMessage,
+    error: Schema.Never,
+    invalidates: () => []
+  }
 ) {
   static readonly layer = this.toLayer(
     Effect.gen(function*() {

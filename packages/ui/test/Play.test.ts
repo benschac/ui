@@ -9,7 +9,7 @@ const SaverEvents = UiSchema.TaggedEnum({ Saved: {} })
 
 class Save extends Command.Service<Save>()(
   "Saver/Save",
-  { args: {}, success: SaverMessage }
+  { args: {}, success: SaverMessage, error: Schema.Never }
 ) {
   static readonly layer = this.toLayer(() =>
     Effect.as(Effect.sleep("1 second"), SaverMessage.SucceededSave())

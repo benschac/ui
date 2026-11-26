@@ -17,6 +17,7 @@ class Ticks extends Command.Service<Ticks>()(
   {
     args: { n: Schema.Number },
     success: Schema.Number,
+    error: Schema.Never,
     stream: true,
     invalidates: () => []
   }
@@ -101,7 +102,7 @@ describe("Command", () => {
     it("defaults omitted invalidates to no targets and exposes success and error Schemas", () => {
       class NoInvalidation extends Command.Service<NoInvalidation>()(
         "NoInvalidation",
-        { args: {}, success: Schema.Void }
+        { args: {}, success: Schema.Void, error: Schema.Never }
       ) {}
       assert.deepStrictEqual(NoInvalidation.make().invalidates, [])
       assert.strictEqual(NoInvalidation.success, Schema.Void)
@@ -116,6 +117,7 @@ describe("Command", () => {
         {
           args: { id: Schema.String, name: Schema.String },
           success: Schema.String,
+          error: Schema.Never,
           invalidates: ({ id }) => [Query.Tag(`user:${id}`)],
           optimistic: ({ id, name }) => [{ id, name }] as any,
           writes: (success, { id }) => [{ id, success }] as any

@@ -906,7 +906,12 @@ describe("Command.afterRefetch", () => {
     }
     class Touch extends Command.Service<Touch>()(
       "items/Touch",
-      { args: {}, success: Schema.Void, invalidates: () => [ListItems] }
+      {
+        args: {},
+        success: Schema.Void,
+        error: Schema.Never,
+        invalidates: () => [ListItems]
+      }
     ) {
       static readonly layer = this.toLayer(() =>
         Effect.sleep("10 millis").pipe(Effect.andThen(Effect.sync(() => {

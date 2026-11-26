@@ -234,11 +234,43 @@ describe("Component.noop", () => {
       story.resolve(Quiet, Component.noop).expectNone()
     }))
 
+  it.effect("a Component.Noop Service ignores its body's result and is silent", () =>
+    run(Effect.gen(function*() {
+      class Toggle extends Command.Service<Toggle>()("test/Toggle", {
+        args: {},
+        success: Component.Noop,
+        error: Schema.Never
+      }) {}
+      const Toggler = Component.provide(
+        Component.define({
+          name: "Toggler",
+          model: Schema.Null,
+          message: Schema.Never
+        }).make({
+          init: ($) => $.set(null).run(Toggle.make()),
+          update: ($) => $.model,
+          view: (h) => h.text("")
+        }),
+        Toggle.toLayer(() => Effect.succeed(true))
+      )
+      const root = yield* TestHost.mount(Toggler, {})
+      yield* TestHost.settle
+      assert.deepStrictEqual(
+        ended(root).map((entry) => [entry.name, entry.silent]),
+        [["test/Toggle", true]]
+      )
+    })))
+
   it.effect("a Service run ends with its instance, even with its Layer provided above, and maps nothing", () =>
     run(Effect.gen(function*() {
       class Slow extends Command.Service<Slow>()(
         "test/Slow",
-        { args: {}, success: Schema.Void, invalidates: () => [] }
+        {
+          args: {},
+          success: Schema.Void,
+          error: Schema.Never,
+          invalidates: () => []
+        }
       ) {
         static readonly layer = this.toLayer(() => Effect.sleep("1 second"))
       }

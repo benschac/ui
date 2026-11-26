@@ -86,6 +86,7 @@ export class RenamePerson
   extends Command.Service<RenamePerson>()("RenamePerson", {
     args: { id: Schema.Number },
     success: Schema.Never,
+    error: Schema.Never,
     invalidates: () => [],
     optimistic: ({ id }) => [GetPerson.patch({ id }, () => "Renamed")]
   })

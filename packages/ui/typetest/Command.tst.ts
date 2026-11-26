@@ -12,11 +12,22 @@ const St = Command.make(
 )
 class SA extends Command.Service<SA>()(
   "SA",
-  { args: {}, success: Schema.String, invalidates: () => [] }
+  {
+    args: {},
+    success: Schema.String,
+    error: Schema.Never,
+    invalidates: () => []
+  }
 ) {}
 class SB extends Command.Service<SB>()(
   "SB",
-  { args: {}, success: Schema.Number, stream: true, invalidates: () => [] }
+  {
+    args: {},
+    success: Schema.Number,
+    error: Schema.Never,
+    stream: true,
+    invalidates: () => []
+  }
 ) {}
 class SaveFailed extends Schema.TaggedError<SaveFailed>()("SaveFailed", {
   reason: Schema.String
@@ -173,12 +184,14 @@ describe("Command", () => {
       expect(service).type.not.toBeCallableWith("Load", {
         args: {},
         success: Schema.Number,
+        error: Schema.Never,
         invalidates: () => [],
         server: true
       })
       expect(service).type.not.toBeCallableWith("Load", {
         args: {},
         success: Schema.Number,
+        error: Schema.Never,
         invalidates: () => [],
         stream: true,
         server: true
@@ -189,15 +202,24 @@ describe("Command", () => {
       }, () => Effect.succeed(1))
     })
 
-    it("requires args and success, allows omitted invalidates", () => {
+    it("requires args, success and error, allows omitted invalidates", () => {
       const service = Command.Service<"Load">()
       expect(service).type.toBeCallableWith("Load", {
         args: {},
+        success: Schema.Number,
+        error: Schema.Never
+      })
+      expect(service).type.not.toBeCallableWith("Load", {
+        args: {},
+        error: Schema.Never
+      })
+      expect(service).type.not.toBeCallableWith("Load", {
+        args: {},
         success: Schema.Number
       })
-      expect(service).type.not.toBeCallableWith("Load", { args: {} })
       expect(service).type.not.toBeCallableWith("Load", {
         success: Schema.Number,
+        error: Schema.Never,
         invalidates: () => []
       })
       expect(Command.make).type.not.toBeCallableWith(
@@ -214,6 +236,7 @@ describe("Command", () => {
       Command.Service<"WithWrites">()("WithWrites", {
         args: { id: Schema.String },
         success: Schema.Number,
+        error: Schema.Never,
         writes: (count, args) => {
           expect(count).type.toBe<number>()
           expect(args).type.toBe<{ readonly id: string }>()
@@ -256,6 +279,43 @@ describe("Command", () => {
       )
       expect(SA.toLayer).type.not.toBeCallableWith(() =>
         Db.use((db) => db.save)
+      )
+    })
+
+    it("toLayer takes any result for a Component.Noop success, and only the success otherwise", () => {
+      class Toggle extends Command.Service<Toggle>()("Toggle", {
+        args: {},
+        success: Component.Noop,
+        error: Schema.Never
+      }) {}
+      class Watch extends Command.Service<Watch>()("Watch", {
+        args: {},
+        success: Component.Noop,
+        error: Schema.Never,
+        stream: true
+      }) {}
+      class Either extends Command.Service<Either>()("Either", {
+        args: {},
+        success: Schema.Union([Message, Component.Noop]),
+        error: Schema.Never
+      }) {}
+      expect(Toggle.toLayer(() => Effect.succeed(true))).type.toBe<
+        Layer.Layer<Toggle>
+      >()
+      expect(Toggle.toLayer).type.toBeCallableWith(() => Effect.void)
+      expect(Toggle.toLayer).type.toBeCallableWith(() =>
+        Effect.succeed(Component.noop)
+      )
+      expect(Toggle.toLayer).type.not.toBeCallableWith(() =>
+        Effect.fail("boom")
+      )
+      expect(Watch.toLayer).type.toBeCallableWith(() => Stream.make(1, 2))
+      expect(Toggle.make()).type.toBe<
+        Command.Issued<Component.Noop, Toggle, Component.Noop, "Effect">
+      >()
+      expect(SA.toLayer).type.not.toBeCallableWith(() => Effect.void)
+      expect(Either.toLayer).type.not.toBeCallableWith(() =>
+        Effect.succeed(true)
       )
     })
 

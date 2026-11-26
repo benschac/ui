@@ -27,11 +27,11 @@ const Events = UiSchema.TaggedEnum({ Changed: {} })
 
 class Save extends Command.Service<Save>()(
   "typetest/define/Save",
-  { args: {}, success: Message, invalidates: () => [] }
+  { args: {}, success: Message, error: Schema.Never, invalidates: () => [] }
 ) {}
 class Audit extends Command.Service<Audit>()(
   "typetest/define/Audit",
-  { args: {}, success: Message, invalidates: () => [] }
+  { args: {}, success: Message, error: Schema.Never, invalidates: () => [] }
 ) {}
 
 const Model = Schema.Struct({ body: Schema.String, edits: Schema.Number })

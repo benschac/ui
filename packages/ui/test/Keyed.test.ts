@@ -91,6 +91,7 @@ const makeApp = (options?: {
     {
       args: { id: Schema.String, name: Schema.String },
       success: Schema.Void,
+      error: Schema.Never,
       invalidates: ({ id }) => [GetUser.entry({ id })],
       optimistic: (
         { id, name }

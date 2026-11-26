@@ -26,7 +26,7 @@
  *
  * class SaveTodo extends Command.Service<SaveTodo>()(
  *   "todos/SaveTodo",
- *   { args: Todo, success: Schema.Void }
+ *   { args: Todo, success: Schema.Void, error: Schema.Never }
  * ) {}
  *
  * const TodoItem = Component.define({
@@ -145,7 +145,8 @@ export interface Noop {
  * @since 0.1.0
  */
 export const Noop: Schema.declare<Noop> = Schema.declare(internalNoop.isNoop, {
-  identifier: "Component.Noop"
+  identifier: "Component.Noop",
+  [NoopTypeId]: NoopTypeId
 })
 
 /**
@@ -156,7 +157,8 @@ export const Noop: Schema.declare<Noop> = Schema.declare(internalNoop.isNoop, {
  * Use as the result of a Command body, a `Command.map` mapper, a
  * `Command.match` branch or an `onMount` Effect when there's nothing to tell
  * the component, instead of adding a no-op variant to its Message. `Command.asNoop` is
- * shorthand for `Command.as(Component.noop)`.
+ * shorthand for `Command.as(Component.noop)`. A `Command.Service` with
+ * `success: Component.Noop` ends with it whatever its body returns.
  *
  * **Details**
  *
@@ -4238,7 +4240,7 @@ type HandlerOf<O> = O extends { readonly onFailure?: infer F }
  *
  * class SaveTodo extends Command.Service<SaveTodo>()(
  *   "todos/SaveTodo",
- *   { args: { id: Schema.String }, success: Schema.Void }
+ *   { args: { id: Schema.String }, success: Schema.Void, error: Schema.Never }
  * ) {
  *   static readonly layer = this.toLayer(() => Effect.void)
  * }
@@ -4284,7 +4286,7 @@ type HandlerOf<O> = O extends { readonly onFailure?: infer F }
  *
  * class JoinRoom extends Command.Service<JoinRoom>()(
  *   "rooms/JoinRoom",
- *   { args: {}, success: RoomMessage }
+ *   { args: {}, success: RoomMessage, error: Schema.Never }
  * ) {
  *   static readonly layer = this.toLayer(
  *     Chat.useSync((chat) => () => Effect.succeed(RoomMessage.CompletedJoinRoom({ room: chat.room })))

@@ -1346,6 +1346,7 @@ describe("Runtime", () => {
       {
         args: { n: Schema.Number },
         success: Schema.Number,
+        error: Schema.Never,
         invalidates: () => [GetCount],
         mode: "queue"
       }
@@ -1362,6 +1363,7 @@ describe("Runtime", () => {
       {
         args: { n: Schema.Number },
         success: Schema.Number,
+        error: Schema.Never,
         invalidates: () => [],
         optimistic: () => [GetCount.patch({ id: "a" }, (count) => count + 100)],
         writes: (count) => [GetCount.set({ id: "a" }, count)]
@@ -1511,6 +1513,7 @@ describe("Runtime", () => {
           {
             args: { n: Schema.Number },
             success: Component.Noop,
+            error: Schema.Never,
             stream: true,
             mode: "queue"
           }
@@ -1665,7 +1668,12 @@ describe("Runtime", () => {
       const gate = Deferred.makeUnsafe<void>()
       class Stubborn extends Command.Service<Stubborn>()(
         "test/Stubborn",
-        { args: {}, success: Schema.Void, invalidates: () => [] }
+        {
+          args: {},
+          success: Schema.Void,
+          error: Schema.Never,
+          invalidates: () => []
+        }
       ) {
         static readonly layer = this.toLayer(
           Effect.gen(function*() {
@@ -1844,7 +1852,7 @@ describe("Runtime", () => {
         const events: Array<string> = []
         class Job extends Command.Service<Job>()(
           "test/LateJob",
-          { args: {}, success: Schema.Never }
+          { args: {}, success: Schema.Never, error: Schema.Never }
         ) {
           static readonly layer = this.toLayer(
             Effect.gen(function*() {
@@ -1909,6 +1917,7 @@ describe("Runtime", () => {
           {
             args: {},
             success: Schema.Never,
+            error: Schema.Never,
             invalidates: () => [],
             mode: "switch"
           }
@@ -1918,6 +1927,7 @@ describe("Runtime", () => {
           {
             args: {},
             success: Schema.Never,
+            error: Schema.Never,
             invalidates: () => [],
             stream: true
           }
@@ -2754,6 +2764,7 @@ describe("Runtime", () => {
       {
         args: { name: Schema.String },
         success: Schema.String,
+        error: Schema.Never,
         invalidates: () => []
       }
     ) {
@@ -2876,7 +2887,12 @@ describe("Runtime", () => {
       {}
       class ReadStore extends Command.Service<ReadStore>()(
         "test/ReadStore",
-        { args: {}, success: Schema.String, invalidates: () => [] }
+        {
+          args: {},
+          success: Schema.String,
+          error: Schema.Never,
+          invalidates: () => []
+        }
       ) {
         static readonly layer = this.toLayer(
           Store.useSync((store) => () => Effect.succeed(String(store.id)))
@@ -2954,7 +2970,12 @@ describe("Runtime", () => {
           {}
           class ReadProject extends Command.Service<ReadProject>()(
             "test/ReadProject",
-            { args: {}, success: Schema.String, invalidates: () => [] }
+            {
+              args: {},
+              success: Schema.String,
+              error: Schema.Never,
+              invalidates: () => []
+            }
           ) {
             static readonly layer = this.toLayer(
               Project.useSync((project) => () => Effect.succeed(project.id))
@@ -5636,7 +5657,12 @@ describe("Runtime", () => {
       }) {}
       class Show extends Command.Service<Show>()(
         "test/Show",
-        { args: {}, success: Schema.String, invalidates: () => [] }
+        {
+          args: {},
+          success: Schema.String,
+          error: Schema.Never,
+          invalidates: () => []
+        }
       ) {
         static readonly layer = this.toLayer(
           Greeter.useSync((greeter) => () => Effect.succeed(greeter.room))
@@ -5689,7 +5715,7 @@ describe("Runtime", () => {
     })
     class Show extends Command.Service<Show>()(
       "test/KeyedShow",
-      { args: {}, success: Msg, invalidates: () => [] }
+      { args: {}, success: Msg, error: Schema.Never, invalidates: () => [] }
     ) {
       static readonly layer = this.toLayer(
         Greeter.useSync((greeter) => () =>
@@ -5933,7 +5959,7 @@ describe("Runtime", () => {
       })
       class Ping extends Command.Service<Ping>()(
         "test/KeyedPing",
-        { args: {}, success: Act, invalidates: () => [] }
+        { args: {}, success: Act, error: Schema.Never, invalidates: () => [] }
       ) {
         static readonly layer = this.toLayer(
           Host.useSync((host) => () =>
@@ -5943,7 +5969,7 @@ describe("Runtime", () => {
       }
       class Need extends Command.Service<Need>()(
         "test/KeyedNeed",
-        { args: {}, success: Act, invalidates: () => [] }
+        { args: {}, success: Act, error: Schema.Never, invalidates: () => [] }
       ) {
         static readonly layer = this.toLayer(
           Greeter.useSync((greeter) => () =>

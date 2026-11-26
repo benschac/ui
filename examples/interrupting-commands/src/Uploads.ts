@@ -58,6 +58,7 @@ export class UploadFile extends Command.Service<UploadFile>()(
   {
     args: { uploadId: Schema.Number, sizeMegabytes: Schema.Number },
     success: UploadsMessage,
+    error: Schema.Never,
     group: ["uploadId"],
     mode: "switch"
   }

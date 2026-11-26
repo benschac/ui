@@ -5,7 +5,8 @@
  * feeds its result back to the instance as a message, so `update` stays pure
  * and a story test can read what was issued without running anything. A
  * Command with nothing to tell the component ends with `Component.noop`, or
- * is piped through `Command.asNoop`, and sends nothing.
+ * is piped through `Command.asNoop`, and sends nothing. A `Command.Service`
+ * with `success: Component.Noop` ends with it whatever its body returns.
  *
  * Both constructors take a name and options with a required `args` Schema:
  *
@@ -46,7 +47,8 @@
  *
  * class DeleteTodo extends Command.Service<DeleteTodo>()("todos/DeleteTodo", {
  *   args: { id: Schema.String },
- *   success: Message
+ *   success: Message,
+ *   error: Schema.Never
  * }) {
  *   static readonly layer = this.toLayer(Effect.gen(function*() {
  *     const kv = yield* KeyValueStore.KeyValueStore
@@ -760,7 +762,6 @@ export interface Service<
   ): Layer.Layer<Self, LE, Exclude<LR, Scope.Scope>>
   readonly args: Schema.Top
   readonly success: Success
-  /** Defaults to `Schema.Never`. */
   readonly error: Error
   /**
    * Issues the Command. The component requires `Self`. When the body can
@@ -798,8 +799,20 @@ export declare namespace Service {
    */
   export type Implementation<Args, A, IsStream extends boolean, Err = never> =
     IsStream extends true ?
-      (args: Args) => Stream.Stream<A, Err, FrameworkService>
-      : (args: Args) => Effect.Effect<A, Err, FrameworkService>
+      (args: Args) => Stream.Stream<Result<A>, Err, FrameworkService>
+      : (args: Args) => Effect.Effect<Result<A>, Err, FrameworkService>
+
+  /**
+   * What a body returns for a success of `A`: anything when `A` is
+   * `Component.Noop`, since the runtime then ends every run with
+   * `Component.noop`, and `A` otherwise.
+   *
+   * @category models
+   * @since 0.1.0
+   */
+  export type Result<A> = [Component.Noop] extends [A] ?
+    [A] extends [Component.Noop] ? unknown : A
+    : A
 
   /**
    * The options accepted by `Service`.
@@ -808,8 +821,10 @@ export declare namespace Service {
    *
    * On top of `Options`:
    *
-   * - `success`: Schema for the body's result.
-   * - `error`: optional failure Schema; defaults to `Schema.Never`.
+   * - `success`: Schema for the body's result. With `Component.Noop` the
+   *   body's result is ignored and every run is silent.
+   * - `error`: Schema for the body's typed failure, `Schema.Never` when it
+   *   can't fail.
    * - `invalidates` is optional: what a run invalidates, from the args
    *   only, so it's known at issue. It's applied on every exit of a started
    *   run. Omitting it invalidates nothing.
@@ -826,7 +841,7 @@ export declare namespace Service {
     G extends string
   > extends CommandOptions<In, G> {
     readonly success: Success
-    readonly error?: Error | undefined
+    readonly error: Error
     readonly invalidates?:
       | ((args: ArgsOf<In>) => ReadonlyArray<Query.Target>)
       | undefined
@@ -1166,7 +1181,9 @@ export const make: {
  * **Details**
  *
  * Takes a key (the Command's name in logs and stories) and options (`args`,
- * `success`, optional `error` defaulting to `Schema.Never`). Attach the body
+ * `success`, and `error`, which is `Schema.Never` when the body can't fail).
+ * With `success: Component.Noop` the body's result is ignored and every run
+ * is silent, so the body needs no `Effect.as(Component.noop)`. Attach the body
  * with `toLayer`, passing a function or an Effect that runs once per Layer
  * build to capture its dependencies; components then require only this class,
  * and tests can fake it with `X.toLayer(fn)`.
@@ -1205,6 +1222,7 @@ export const make: {
  * class SaveTodo extends Command.Service<SaveTodo>()("todos/SaveTodo", {
  *   args: { id: Schema.String, title: Schema.String },
  *   success: Message,
+ *   error: Schema.Never,
  *   mode: "queue",
  *   group: ["id"]
  * }) {
@@ -1236,7 +1254,7 @@ export const Service: <Self>() => {
     const Key extends string,
     const In extends ArgsInput,
     Success extends Schema.Top,
-    Error extends Schema.Top = Schema.Never,
+    Error extends Schema.Top,
     const G extends GroupField<In> = never
   >(
     key: Key,
@@ -1256,7 +1274,7 @@ export const Service: <Self>() => {
     const Key extends string,
     const In extends ArgsInput,
     Success extends Schema.Top,
-    Error extends Schema.Top = Schema.Never,
+    Error extends Schema.Top,
     const G extends GroupField<In> = never
   >(
     key: Key,
@@ -1281,9 +1299,10 @@ export const Service: <Self>() => {
   const Base = Context.Service<any, any>()(key)
   const { error, invalidates, optimistic, stream, success, writes } = options
   const service = Base as Effect.Effect<(args: unknown) => any, never, any>
+  const silent = internalNoop.isNoopSchema(success)
   class CommandService extends Base {
     static readonly success = success
-    static readonly error = error ?? Schema.Never
+    static readonly error = error
     static toLayer(
       build: ((args: any) => any) | Effect.Effect<(args: any) => any, any, any>
     ): Layer.Layer<any, any, any> {
@@ -1302,8 +1321,16 @@ export const Service: <Self>() => {
         ? undefined
         : (value) => writes(value, args),
       work: stream
-        ? Stream.unwrap(Effect.map(service, (run) => run(args)))
-        : Effect.flatMap(service, (run) => run(args))
+        ? Stream.unwrap(
+          Effect.map(service, (run) => {
+            const work = run(args)
+            return silent ? Stream.as(work, internalNoop.noop) : work
+          })
+        )
+        : Effect.flatMap(service, (run) => {
+          const work = run(args)
+          return silent ? Effect.as(work, internalNoop.noop) : work
+        })
     }))
   )
 }
@@ -1417,6 +1444,8 @@ export const as: {
  *
  * Use when a Command's result doesn't matter to the component, such as a
  * navigation or a focus, instead of adding a no-op variant to its Message. It's shorthand for `Command.as(Component.noop)`.
+ * A `Command.Service` that never has anything to report declares
+ * `success: Component.Noop` instead.
  *
  * **Details**
  *
@@ -1604,7 +1633,8 @@ type AwaitsRefetchOf<R, K> = [K] extends ["Effect"] ? [R] extends [never] ? {
  *
  * class RenameUser extends Command.Service<RenameUser>()("RenameUser", {
  *   args: { id: Schema.String, name: Schema.String },
- *   success: Schema.Void
+ *   success: Schema.Void,
+ *   error: Schema.Never
  * }) {}
  *
  * const rename = RenameUser.make({ id: "1", name: "Ada" }).pipe(

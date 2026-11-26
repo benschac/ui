@@ -87,7 +87,11 @@ describe("Html.customElement", () => {
       const gate = yield* Deferred.make<void>()
       class Save extends Command.Service<Save>()(
         "Save",
-        { args: { color: Schema.String }, success: Message }
+        {
+          args: { color: Schema.String },
+          success: Message,
+          error: Schema.Never
+        }
       ) {
         static readonly layer = this.toLayer(({ color }) =>
           Deferred.await(gate).pipe(Effect.as(Message.Saved({ color })))

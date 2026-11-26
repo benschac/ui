@@ -188,7 +188,7 @@ describe("hot reload", { concurrent: false }, () => {
         const gate = yield* Deferred.make<void>()
         class SlowWork extends Command.Service<SlowWork>()(
           "test/SlowWork",
-          { args: {}, success: Schema.Void }
+          { args: {}, success: Schema.Void, error: Schema.Never }
         ) {
           static readonly layer = this.toLayer(() => Deferred.await(gate))
         }
