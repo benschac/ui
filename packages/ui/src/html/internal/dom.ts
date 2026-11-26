@@ -149,7 +149,8 @@ const isLeaving = (target: globalThis.Node): boolean =>
  * when `kept`. It counts only when focus was inside before `f`, so a first
  * insertion doesn't. A move (`moved`) counts only until focus is back
  * inside, so focus a custom element's `connectedCallback` takes and then
- * moves out is a real exit.
+ * moves out is a real exit. That is `focus`, not `focusin`, which a
+ * `focus` handler moving focus on comes after.
  */
 const takingOut = (
   node: globalThis.Node,
@@ -170,12 +171,12 @@ const takingOut = (
     if (at >= 0) leaving.splice(at, 1)
   }
   leaving.push(entry)
-  if (how === "moved") node.addEventListener("focusin", back, true)
+  if (how === "moved") node.addEventListener("focus", back, true)
   try {
     f()
   } finally {
     back()
-    if (how === "moved") node.removeEventListener("focusin", back, true)
+    if (how === "moved") node.removeEventListener("focus", back, true)
   }
 }
 

@@ -1861,8 +1861,10 @@ describe("BrowserHost", { concurrent: false }, () => {
           "x-focus-on-connect",
           class extends HTMLElement {
             connectedCallback() {
+              this.addEventListener("focus", () => outside.focus(), {
+                once: true
+              })
               this.focus()
-              outside.focus()
             }
           }
         )
