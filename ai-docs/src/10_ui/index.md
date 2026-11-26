@@ -8,8 +8,9 @@ built with `Query`, also in `@effect/ui`. `@effect/ui/html` adds the HTML elemen
 browser host and router, and server rendering.
 
 `Query.Service`, `Query.InfiniteService`, and `Command.Service` declare only
-their Schemas and options (`Command.Service` requires `success` and
-`error`, `Schema.Never` when it can't fail, and may omit `invalidates`).
+their Schemas and options (`Command.Service` requires `success`, usually
+the component's Message Schema, and `error`, `Schema.Never` when it can't
+fail, and may omit `invalidates`).
 Attach implementations with `toLayer` (e.g.
 `static readonly layer = this.toLayer(...)`, or `GetNote.toLayer(fn)` in
 tests). Provide a feature implementation with `NoteActivity.toLayer(ActivityLog)`.
@@ -242,8 +243,9 @@ has something to send. A message that names something that happened isn't
 one, even when `update` returns the Model unchanged for it: `Checkbox` and
 `RadioGroup` send `PressedEnter` so that the key handler cancels Enter. A
 Command with nothing to report ends in `Component.noop`. A `Command.Service`
-declares `success: Component.Noop`, and its body's result is ignored. Pipe
-any other Command through `Command.asNoop`. It sends nothing, and the log still records
+body may return it whatever its `success` is, so `success` stays the
+component's Message Schema. Pipe a Command that returns something else
+through `Command.asNoop`. It sends nothing, and the log still records
 its `CommandEnded` with `silent: true`. A mount that returns `Component.noop`
 likewise sends no message and logs `MountEnded` with `silent: true`. A
 component with no messages takes `message: Schema.Never`.

@@ -171,11 +171,12 @@ describe("Story", () => {
     expect(shared(steps)).type.toBe<Story.Steps<typeof Static>>()
   })
 
-  it("resolves a Command with the definition's own message", () => {
+  it("resolves a Command with the definition's own message, or with Component.noop", () => {
     expect(todoItem.resolve).type.toBeCallableWith(
       SaveTodo,
       TodoItemMessage.Saved()
     )
+    expect(todoItem.resolve).type.toBeCallableWith(SaveTodo, Component.noop)
     expect(todoItem.resolve).type.not.toBeCallableWith(
       SaveTodo,
       SearchMessage.Tick()

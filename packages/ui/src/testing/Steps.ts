@@ -410,7 +410,10 @@ export interface Steps<C extends AnyComponent> extends Pipeable {
    * sends this one. `waitExpired` ends the wait by budget. Under `mode: "queue"`
    * a message also waits for the earlier ones of its group.
    */
-  resolve<D extends Target>(target: D, result: Command.Result<D>): this
+  resolve<D extends Target>(
+    target: D,
+    result: Command.Result<D> | Component.Noop
+  ): this
   /**
    * Fails the oldest running Command matching `target` with a typed failure
    * of its body, and sends the message its `Command.match` maps it to. A
@@ -419,7 +422,10 @@ export interface Steps<C extends AnyComponent> extends Pipeable {
    */
   fail<D extends Target>(target: D, error: Command.Failure<D>): this
   /** Sends one element of the oldest running stream Command matching `target`, which stays pending. */
-  next<D extends StreamTarget>(target: D, result: Command.Result<D>): this
+  next<D extends StreamTarget>(
+    target: D,
+    result: Command.Result<D> | Component.Noop
+  ): this
   /** Ends the oldest running stream Command matching `target`, sending nothing. */
   end<D extends StreamTarget>(target: D): this
   /**

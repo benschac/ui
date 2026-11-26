@@ -234,31 +234,43 @@ describe("Component.noop", () => {
       story.resolve(Quiet, Component.noop).expectNone()
     }))
 
-  it.effect("a Component.Noop Service ignores its body's result and is silent", () =>
+  it.effect("a Service result of Component.noop sends nothing, and skips its mapper and its writes", () =>
     run(Effect.gen(function*() {
-      class Toggle extends Command.Service<Toggle>()("test/Toggle", {
+      const seen: Array<number> = []
+      class Count extends Command.Service<Count>()("test/Count", {
         args: {},
-        success: Component.Noop,
-        error: Schema.Never
+        success: Schema.Number,
+        error: Schema.Never,
+        writes: (n) => {
+          seen.push(n)
+          return []
+        }
       }) {}
-      const Toggler = Component.provide(
+      const Counter = Component.provide(
         Component.define({
-          name: "Toggler",
-          model: Schema.Null,
-          message: Schema.Never
+          name: "Counter",
+          model: Schema.Number,
+          message: Message
         }).make({
-          init: ($) => $.set(null).run(Toggle.make()),
-          update: ($) => $.model,
-          view: (h) => h.text("")
+          init: ($) =>
+            $.set(0).run(
+              Count.make().pipe(Command.map((n) => {
+                seen.push(n)
+                return got(n)
+              }))
+            ),
+          update: ($, message) => message._tag === "Got" ? message.n : $.model,
+          view: (h, model) => h.el("p", String(model))
         }),
-        Toggle.toLayer(() => Effect.succeed(true))
+        Count.toLayer(() => Effect.succeed(Component.noop))
       )
-      const root = yield* TestHost.mount(Toggler, {})
+      const root = yield* TestHost.mount(Counter, {})
       yield* TestHost.settle
       assert.deepStrictEqual(
         ended(root).map((entry) => [entry.name, entry.silent]),
-        [["test/Toggle", true]]
+        [["test/Count", true]]
       )
+      assert.deepStrictEqual(seen, [])
     })))
 
   it.effect("a Service run ends with its instance, even with its Layer provided above, and maps nothing", () =>

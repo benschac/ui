@@ -138,52 +138,15 @@ export interface Noop {
 }
 
 /**
- * Identifies the `Component.Noop` Schema.
- *
- * @stability experimental
- * @category type ids
- * @since 0.1.0
- */
-export const NoopSchemaTypeId = "~@effect/ui/Component/NoopSchema" as const
-
-/**
- * Identifies the `Component.Noop` Schema.
- *
- * @stability experimental
- * @category type ids
- * @since 0.1.0
- */
-export type NoopSchemaTypeId = typeof NoopSchemaTypeId
-
-/**
- * The type of the `Component.Noop` Schema.
- *
- * **Details**
- *
- * A `Command.Service` whose `success` is `Component.Noop` ignores its
- * body's result. A Schema built from it, such as
- * `Schema.suspend(() => Component.Noop)`, doesn't, so its body must return
- * `Component.noop` itself.
- *
- * @stability experimental
- * @category models
- * @since 0.1.0
- */
-export interface NoopSchema extends Schema.declare<Noop> {
-  readonly [NoopSchemaTypeId]: NoopSchemaTypeId
-}
-
-/**
  * Schema for `Component.noop`.
  *
  * @stability experimental
  * @category schemas
  * @since 0.1.0
  */
-export const Noop: NoopSchema = Object.assign(
-  Schema.declare(internalNoop.isNoop, { identifier: "Component.Noop" }),
-  { [NoopSchemaTypeId]: NoopSchemaTypeId } as const
-)
+export const Noop: Schema.declare<Noop> = Schema.declare(internalNoop.isNoop, {
+  identifier: "Component.Noop"
+})
 
 /**
  * The message value that sends nothing.
@@ -192,8 +155,9 @@ export const Noop: NoopSchema = Object.assign(
  *
  * Use as the result of a Command body, a `Command.map` mapper, a
  * `Command.match` branch or an `onMount` Effect when there's nothing to tell
- * the component, instead of adding a no-op variant to its Message. `Command.asNoop` is
- * shorthand for `Command.as(Component.noop)`.
+ * the component, instead of adding a no-op variant to its Message. A
+ * `Command.Service` body may return it whatever its `success` is.
+ * `Command.asNoop` is shorthand for `Command.as(Component.noop)`.
  *
  * **Details**
  *
@@ -202,7 +166,8 @@ export const Noop: NoopSchema = Object.assign(
  * copies of `effect` in one bundle agree on it. When the final result of a
  * Command run, after every mapper, or of a mount is `Component.noop`, the
  * runtime sends nothing and logs no `Update`, and `CommandEnded` records the
- * run as `silent`. `$.run` takes a Command whose result is the Message,
+ * run as `silent`. A Command body's `Component.noop` is never passed to
+ * `Command.map`, `Command.match` or `writes`. `$.run` takes a Command whose result is the Message,
  * `Component.Noop` or a union of the two, so a component whose Message is
  * `Schema.Never` can run one.
  *
@@ -239,8 +204,8 @@ export const noop: Noop = internalNoop.noop
  *
  * **When to use**
  *
- * Use to narrow a result typed `A | Component.Noop`, such as in a mapper over
- * a Command that can be silent. `=== Component.noop` doesn't narrow the
+ * Use to narrow a value typed `A | Component.Noop`, such as the `message` of
+ * a story's pending run. `=== Component.noop` doesn't narrow the
  * other branch, and misses a copy of the value made by another copy of
  * `effect`.
  *

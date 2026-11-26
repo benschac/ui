@@ -160,7 +160,7 @@ export class Paint extends Command.Service<Paint>()(
   "devtools/Paint",
   {
     args: { session: Schema.String, seq: Schema.NullOr(Schema.Number) },
-    success: Schema.Union([OverlayMessage, Component.Noop]),
+    success: OverlayMessage,
     error: Schema.Never,
     mode: "switch"
   }
@@ -210,7 +210,7 @@ export class SaveOpen extends Command.Service<SaveOpen>()(
   static readonly layer = this.toLayer(
     Effect.gen(function*() {
       const pages = yield* Pages
-      return ({ open }) => pages.setOpen(open)
+      return ({ open }) => Effect.as(pages.setOpen(open), Component.noop)
     })
   )
 }
@@ -222,7 +222,8 @@ export class SavePosition extends Command.Service<SavePosition>()(
   static readonly layer = this.toLayer(
     Effect.gen(function*() {
       const pages = yield* Pages
-      return ({ position }) => pages.setPosition(position)
+      return ({ position }) =>
+        Effect.as(pages.setPosition(position), Component.noop)
     })
   )
 }
