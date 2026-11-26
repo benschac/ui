@@ -87,6 +87,7 @@ describe("DevTools WebMCP", { concurrent: false }, () => {
           "effect_ui_diff_state",
           "effect_ui_show_entry",
           "effect_ui_resume",
+          "effect_ui_set_recording",
           "effect_ui_get_message_schema",
           "effect_ui_wait"
         ])
@@ -158,7 +159,7 @@ describe("DevTools WebMCP", { concurrent: false }, () => {
           yield* play("open").pipe(Effect.provide(services))
           yield* wait(20)
 
-          assert.strictEqual(mc.tools.size, 13)
+          assert.strictEqual(mc.tools.size, 14)
           assert.isTrue(
             mc.tools.get("effect_ui_dispatch")?.annotations?.consequentialHint
           )

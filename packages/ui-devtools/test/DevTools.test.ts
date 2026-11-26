@@ -219,6 +219,7 @@ const Pair = Html.component({
 describe("DevTools overlay", { concurrent: false }, () => {
   afterEach(() => {
     localStorage.clear()
+    sessionStorage.clear()
   })
 
   it.live("aligns exclusion across encodeKeys, disables paint on excluded links, and keeps evicted baselines", () =>
@@ -392,6 +393,88 @@ describe("DevTools overlay", { concurrent: false }, () => {
         yield* click(
           HtmlLocator.getByRole(root, "button", {
             name: "Resume the live page"
+          })
+        )
+      }))
+    }))
+
+  it.live("stops and starts recording a tag from the overlay, so a tick burst keeps the click, and remembers it for the tab", () =>
+    Effect.gen(function*() {
+      const ClockMessage = UiSchema.TaggedEnum({ Ticked: {}, Clicked: {} })
+      const Clock = Html.component({
+        name: "Clock",
+        model: Schema.Struct({ ticks: Schema.Number, clicks: Schema.Number }),
+        message: ClockMessage
+      }).make({
+        init: () => ({ ticks: 0, clicks: 0 }),
+        update: {
+          Ticked: ($) => $.evolve({ ticks: $.model.ticks + 1 }),
+          Clicked: ($) => $.evolve({ clicks: $.model.clicks + 1 })
+        },
+        view: (h) =>
+          h.div(
+            h.button.on("click", ClockMessage.Ticked()).children("Tick"),
+            h.button.on("click", ClockMessage.Clicked()).children("Click")
+          )
+      })
+      const updates = (root: HTMLElement, tag: string) =>
+        HtmlLocator.queryAllByRole(root, "button", {
+          name: new RegExp("Update " + tag + "$")
+        }).filter((node) => node.classList.contains("row-button"))
+      const session = (exclude: ReadonlyArray<string>) =>
+        Effect.gen(function*() {
+          localStorage.clear()
+          const app = document.body.appendChild(document.createElement("div"))
+          yield* Effect.addFinalizer(() => Effect.sync(() => app.remove()))
+          yield* Layer.build(DevTools.layer({ size: 3, exclude })).pipe(
+            Effect.flatMap((services) =>
+              BrowserHost.mountEffect(Clock, {}, app).pipe(
+                Effect.provide(services)
+              )
+            )
+          )
+          yield* settle
+          const root = overlay()
+          yield* open(root)
+          const tick = HtmlLocator.getByRole(app, "button", { name: "Tick" })
+          const ticks = Effect.fnUntraced(function*(count: number) {
+            for (let n = 0; n < count; n++) yield* click(tick)
+          })
+          return { app, root, ticks }
+        })
+
+      yield* Effect.scoped(Effect.gen(function*() {
+        const { app, root, ticks } = yield* session(["Ticked"])
+        yield* ticks(2)
+        assert.lengthOf(updates(root, "Ticked"), 0)
+        yield* click(
+          HtmlLocator.getByRole(root, "button", {
+            name: "Start recording Ticked"
+          })
+        )
+        yield* ticks(1)
+        assert.lengthOf(updates(root, "Ticked"), 1)
+
+        yield* click(updates(root, "Ticked")[0]!)
+        yield* click(
+          HtmlLocator.getByRole(root, "button", {
+            name: "Stop recording Ticked"
+          })
+        )
+        yield* click(HtmlLocator.getByRole(app, "button", { name: "Click" }))
+        yield* ticks(5)
+        assert.lengthOf(updates(root, "Clicked"), 1)
+        assert.lengthOf(updates(root, "Ticked"), 1)
+      }))
+
+      // A reload in the same tab keeps the runtime choice over the config.
+      yield* Effect.scoped(Effect.gen(function*() {
+        const { root, ticks } = yield* session([])
+        yield* ticks(2)
+        assert.lengthOf(updates(root, "Ticked"), 0)
+        assert.isDefined(
+          HtmlLocator.getByRole(root, "button", {
+            name: "Start recording Ticked"
           })
         )
       }))
