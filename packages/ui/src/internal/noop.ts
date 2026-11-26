@@ -19,8 +19,8 @@ export const isNoop = (u: unknown): u is Noop =>
   Predicate.hasProperty(u, TypeId) && u[TypeId] === TypeId
 
 /**
- * Recognises the `Component.Noop` Schema by the property `Component.NoopSchema` types, so the runtime silences
- * exactly the Services whose `toLayer` takes any result. A Schema built from it, such as a `suspend`, has neither.
+ * Checks the same property `Component.NoopSchema` types, so the runtime silences exactly the Services whose
+ * `toLayer` takes any result.
  *
  * @internal
  */

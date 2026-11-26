@@ -6,7 +6,7 @@
  * and a story test can read what was issued without running anything. A
  * Command with nothing to tell the component ends with `Component.noop`, or
  * is piped through `Command.asNoop`, and sends nothing. A `Command.Service`
- * with `success: Component.Noop` ends with it whatever its body returns.
+ * with `success: Component.Noop` is always silent, whatever its body returns.
  *
  * Both constructors take a name and options with a required `args` Schema:
  *
@@ -803,9 +803,8 @@ export declare namespace Service {
       : (args: Args) => Effect.Effect<A, Err, FrameworkService>
 
   /**
-   * The body `toLayer` takes: an `Implementation` whose result may be
-   * anything when `Success` is the `Component.Noop` Schema itself, since
-   * `toLayer` then maps it to `Component.noop`.
+   * The body `toLayer` takes. Its result is `unknown` when `Success` is
+   * `Component.Noop`, since `toLayer` replaces it with `Component.noop`.
    *
    * @category models
    * @since 0.1.0
@@ -829,10 +828,9 @@ export declare namespace Service {
    *
    * On top of `Options`:
    *
-   * - `success`: Schema for the body's result. With `Component.Noop` the
-   *   body's result is ignored and every run is silent.
-   * - `error`: Schema for the body's typed failure, `Schema.Never` when it
-   *   can't fail.
+   * - `success`: Schema for the body's result, or `Component.Noop` for a
+   *   silent Command.
+   * - `error`: Schema for the body's typed failure, `Schema.Never` if none.
    * - `invalidates` is optional: what a run invalidates, from the args
    *   only, so it's known at issue. It's applied on every exit of a started
    *   run. Omitting it invalidates nothing.
@@ -1190,8 +1188,8 @@ export const make: {
  *
  * Takes a key (the Command's name in logs and stories) and options (`args`,
  * `success`, and `error`, which is `Schema.Never` when the body can't fail).
- * With `success: Component.Noop` the body's result is ignored and every run
- * is silent, so the body needs no `Effect.as(Component.noop)`. Attach the body
+ * With `success: Component.Noop` every run is silent and the body may return
+ * anything, with no `Effect.as(Component.noop)`. Attach the body
  * with `toLayer`, passing a function or an Effect that runs once per Layer
  * build to capture its dependencies; components then require only this class,
  * and tests can fake it with `X.toLayer(fn)`.

@@ -9,8 +9,8 @@ browser host and router, and server rendering.
 
 `Query.Service`, `Query.InfiniteService`, and `Command.Service` declare only
 their Schemas and options (`Command.Service` requires `success` and
-`error`, `Schema.Never` when it can't fail, may omit `invalidates`, and uses
-`success: Component.Noop` for silent results, whose body's result is ignored). Attach implementations with `toLayer` (e.g.
+`error`, `Schema.Never` when it can't fail, and may omit `invalidates`).
+Attach implementations with `toLayer` (e.g.
 `static readonly layer = this.toLayer(...)`, or `GetNote.toLayer(fn)` in
 tests). Provide a feature implementation with `NoteActivity.toLayer(ActivityLog)`.
 Declare a child component by calling it with the parent's `h`:
@@ -241,9 +241,9 @@ Never write a no-op message, such as `Noop` or a tag added only so a result
 has something to send. A message that names something that happened isn't
 one, even when `update` returns the Model unchanged for it: `Checkbox` and
 `RadioGroup` send `PressedEnter` so that the key handler cancels Enter. A
-Command with nothing to report ends in `Component.noop`: a
-`Command.Service` declares `success: Component.Noop` and its body's result is
-ignored, and an issued Command goes through `Command.asNoop`. It sends nothing, and the log still records
+Command with nothing to report ends in `Component.noop`. A `Command.Service`
+declares `success: Component.Noop`, and its body's result is ignored. Pipe
+any other Command through `Command.asNoop`. It sends nothing, and the log still records
 its `CommandEnded` with `silent: true`. A mount that returns `Component.noop`
 likewise sends no message and logs `MountEnded` with `silent: true`. A
 component with no messages takes `message: Schema.Never`.

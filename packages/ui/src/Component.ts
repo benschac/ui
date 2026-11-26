@@ -160,10 +160,10 @@ export type NoopSchemaTypeId = typeof NoopSchemaTypeId
  *
  * **Details**
  *
- * A `Command.Service` whose `success` is this type ignores its body's
- * result. A Schema built from `Component.Noop`, such as
- * `Schema.suspend(() => Component.Noop)` or an annotated copy, isn't one, so
- * its body returns `Component.noop` itself.
+ * A `Command.Service` whose `success` is `Component.Noop` ignores its
+ * body's result. A Schema built from it, such as
+ * `Schema.suspend(() => Component.Noop)`, doesn't, so its body must return
+ * `Component.noop` itself.
  *
  * @stability experimental
  * @category models
@@ -193,8 +193,7 @@ export const Noop: NoopSchema = Object.assign(
  * Use as the result of a Command body, a `Command.map` mapper, a
  * `Command.match` branch or an `onMount` Effect when there's nothing to tell
  * the component, instead of adding a no-op variant to its Message. `Command.asNoop` is
- * shorthand for `Command.as(Component.noop)`. A `Command.Service` with
- * `success: Component.Noop` ends with it whatever its body returns.
+ * shorthand for `Command.as(Component.noop)`.
  *
  * **Details**
  *

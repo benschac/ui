@@ -2,4 +2,4 @@
 "@effect/ui": minor
 ---
 
-`Command.Service` now requires `error` (add `error: Schema.Never` where it was omitted), and a `success: Component.Noop` Service's body may return any result, so it no longer needs `Effect.as(Component.noop)`.
+`Command.Service` now requires `error`: add `error: Schema.Never` where it was omitted. A Service with `success: Component.Noop` ignores its body's result, so the body no longer needs `Effect.as(Component.noop)`.
