@@ -120,7 +120,7 @@ import * as Schema from "effect/Schema"
 import * as Stream from "effect/Stream"
 import { DirectionProvider } from "./DirectionProvider.ts"
 import { type Attributed, flag } from "./internal/attributes.ts"
-import { rightToLeft, watchDirectionScoped } from "./internal/direction.ts"
+import { rightToLeft, watchDirectionWhile } from "./internal/direction.ts"
 import { field } from "./internal/field.ts"
 import { keyed } from "./internal/list.ts"
 import { frameOf, whenFinished } from "./internal/transition.ts"
@@ -273,8 +273,8 @@ const groupSend = new WeakMap<
 
 const TrackGroup = Mount.makeStream(
   "TrackGroup",
-  { args: {} },
-  (node: HTMLDivElement) =>
+  { args: { css: Schema.Boolean } },
+  (node: HTMLDivElement, args, changes) =>
     Stream.callback<RadioGroupMessage>((queue) =>
       Effect.acquireRelease(
         Effect.sync(() => {
@@ -286,8 +286,16 @@ const TrackGroup = Mount.makeStream(
           })
       ).pipe(
         Effect.andThen(
-          watchDirectionScoped(node, (rtl) =>
-            Queue.offerUnsafe(queue, RadioGroupMessage.FoundDirection({ rtl })))
+          watchDirectionWhile(
+            node,
+            args,
+            changes,
+            (rtl) =>
+              Queue.offerUnsafe(
+                queue,
+                RadioGroupMessage.FoundDirection({ rtl })
+              )
+          )
         )
       )
     )
@@ -644,7 +652,7 @@ export const RadioGroup = Html.component({
             "data-required": flag(required)
           })
           .children(hidden)
-          .onMount(TrackGroup())),
+          .onMount(TrackGroup({ css: p.reads.provider === undefined }))),
       radio: View.wrapPart(
         radioPart,
         <B extends KeyedButton>(

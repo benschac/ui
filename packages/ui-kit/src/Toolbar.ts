@@ -652,7 +652,7 @@ export const Toolbar = Html.component({
           "data-orientation": orientation,
           "data-disabled": flag(disabled)
         }).onMount(
-          TrackDirection().pipe(
+          TrackDirection({ css: p.reads.provider === undefined }).pipe(
             Mount.map((rtl) => ToolbarMessage.FoundDirection({ rtl }))
           )
         )),

@@ -1,6 +1,8 @@
 import * as Mount from "@effect/ui/Mount"
 import * as Effect from "effect/Effect"
 import * as Queue from "effect/Queue"
+import * as Schema from "effect/Schema"
+import type * as Scope from "effect/Scope"
 import * as Stream from "effect/Stream"
 import { isElement } from "./dom.ts"
 
@@ -88,12 +90,11 @@ const observe = (node: Element, read: () => void, signal: AbortSignal) => {
   }
 }
 
-// Sends the element's CSS `direction`, `true` for right-to-left, on mount
+// Sends the element's CSS `direction`, `true` for right-to-left, on start
 // and whenever it changes: when `dir`, `style` or
 // `class` changes on it or above it, and when focus enters, for a change
-// a stylesheet alone made. Returns the read, for a pointer press to send
-// it before its own message.
-export const watchDirection = (
+// a stylesheet alone made.
+const watchDirection = (
   node: Element,
   send: (rtl: boolean) => void,
   signal: AbortSignal
@@ -112,24 +113,55 @@ export const watchDirection = (
   return read
 }
 
-export const watchDirectionScoped = (
-  node: Element,
-  send: (rtl: boolean) => void
-) =>
-  Effect.acquireRelease(
-    Effect.sync(() => new AbortController()),
-    (controller) => Effect.sync(() => controller.abort())
-  ).pipe(
-    Effect.map((controller) => watchDirection(node, send, controller.signal))
-  )
+const noop = () => {}
 
+interface Css {
+  readonly css: boolean
+}
+
+// Watches the CSS direction only while a mount's `css` arg is true, as it is
+// without a `DirectionProvider` or a `dir` prop, whose answer wins and costs
+// no style reads. Returns the read, for a pointer press to send it before its
+// own message.
+export const watchDirectionWhile = (
+  node: Element,
+  args: Css,
+  changes: Stream.Stream<Css>,
+  send: (rtl: boolean) => void
+): Effect.Effect<() => void, never, Scope.Scope> =>
+  Effect.suspend(() => {
+    let controller: AbortController | undefined
+    let read = noop
+    const toggle = (css: boolean) => {
+      if (css === (controller !== undefined)) return
+      controller?.abort()
+      controller = css ? new AbortController() : undefined
+      read = controller ? watchDirection(node, send, controller.signal) : noop
+    }
+    toggle(args.css)
+    const follow = Stream.runForEach(
+      changes,
+      (next) => Effect.sync(() => toggle(next.css))
+    )
+    return Effect.addFinalizer(() => Effect.sync(() => toggle(false))).pipe(
+      Effect.andThen(Effect.forkScoped(follow)),
+      Effect.as(() => read())
+    )
+  })
+
+// Sends the element's CSS direction while its `css` arg is true.
 export const TrackDirection = Mount.makeStream(
   "TrackDirection",
-  { args: {} },
-  (node: unknown) =>
+  { args: { css: Schema.Boolean } },
+  (node: unknown, args, changes) =>
     Stream.callback<boolean>((queue) =>
       isElement(node)
-        ? watchDirectionScoped(node, (rtl) => Queue.offerUnsafe(queue, rtl))
+        ? watchDirectionWhile(
+          node,
+          args,
+          changes,
+          (rtl) => Queue.offerUnsafe(queue, rtl)
+        )
         : Effect.void
     )
 )

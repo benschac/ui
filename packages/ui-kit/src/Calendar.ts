@@ -601,7 +601,7 @@ export const Calendar = Html.component({
           .attrs({ tabindex: "-1", ...state })
           .ref(CalendarRootRef)
           .onMount(
-            TrackDirection().pipe(
+            TrackDirection({ css: p.reads.provider === undefined }).pipe(
               Mount.map((rtl) => CalendarMessage.FoundDirection({ rtl }))
             )
           )

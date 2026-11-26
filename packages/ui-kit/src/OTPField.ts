@@ -1223,7 +1223,7 @@ export const OTPField = Html.component({
         state(b)
           .attrs({ role: "group", "data-filled": flag(filled) })
           .onMount(
-            TrackDirection().pipe(
+            TrackDirection({ css: p.reads.provider === undefined }).pipe(
               Mount.map((rtl) => OTPFieldMessage.FoundDirection({ rtl }))
             )
           )

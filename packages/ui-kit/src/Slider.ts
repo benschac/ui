@@ -185,7 +185,7 @@ import {
 import {
   type Directed,
   rightToLeft,
-  watchDirectionScoped
+  watchDirectionWhile
 } from "./internal/direction.ts"
 import { focusVisible } from "./internal/dom.ts"
 import { clamp } from "./internal/range.ts"
@@ -682,14 +682,16 @@ const midpointOf = (element: Element, vertical: boolean): number => {
 // control's CSS `direction`. A
 // press on a thumb drags it from where it was grabbed. A press on the track
 // drags the nearest thumb. `pressed`: the thumb the Model drags, which gets
-// focus. `vertical`: measure along the height, from the bottom.
+// focus. `vertical`: measure along the height, from the bottom. `css`:
+// watch the CSS `direction`, with no `DirectionProvider` to decide it.
 const TrackPointer = Mount.makeStream(
   "TrackPointer",
   {
     args: {
       pressed: Schema.Number,
       disabled: Schema.Boolean,
-      vertical: Schema.Boolean
+      vertical: Schema.Boolean,
+      css: Schema.Boolean
     }
   },
   (node: HTMLElement, args, changes) =>
@@ -724,8 +726,10 @@ const TrackPointer = Mount.makeStream(
         }
         // The document's listeners for the press under way.
         let listening: AbortController | undefined
-        const readDirection = yield* watchDirectionScoped(
+        const readDirection = yield* watchDirectionWhile(
           node,
+          args,
+          changes,
           (rtl) =>
             Queue.offerUnsafe(queue, SliderMessage.FoundDirection({ rtl }))
         )
@@ -1059,7 +1063,8 @@ export const Slider = Html.component({
           TrackPointer({
             pressed: dragging ? model.pressed : -1,
             disabled: s.disabled,
-            vertical: s.vertical
+            vertical: s.vertical,
+            css: p.reads.provider === undefined
           })
         )),
       track: p.part(state),

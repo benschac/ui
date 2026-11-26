@@ -418,7 +418,7 @@ export const ToggleGroup = Html.component({
         })
         // In a toolbar the toolbar's keys move focus.
         return toolbar !== undefined ? root : root.onMount(
-          TrackDirection().pipe(
+          TrackDirection({ css: p.reads.provider === undefined }).pipe(
             Mount.map((rtl) => ToggleGroupMessage.FoundDirection({ rtl }))
           )
         )
