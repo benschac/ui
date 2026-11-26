@@ -16,7 +16,7 @@ import { assert, it } from "@effect/vitest"
 import { DateTime, Effect, Redacted, Schema } from "effect"
 import { container, tick } from "./utils/document.ts"
 
-const Mode = Schema.Literals(["none", "rtl", "nested"])
+const Mode = Schema.Literals(["none", "rtl", "nested", "dir"])
 const Message = UiSchema.TaggedEnum({ SetMode: { mode: Mode } })
 const day = DateTime.makeUnsafe("2026-12-01T00:00:00Z")
 const fruits = [{ value: "apple", label: "Apple" }]
@@ -31,6 +31,7 @@ const Page = Html.component({
   init: () => ({ mode: "rtl" as const }),
   update: { SetMode: ($, { mode }) => ({ ...$.model, mode }) },
   view: (h, { mode }) => {
+    const dir = mode === "dir" ? "rtl" as const : undefined
     const widgets = () =>
       h.div.children(
         Tabs(h, {
@@ -84,6 +85,7 @@ const Page = Html.component({
           props: {
             open: false,
             multiple: true,
+            dir,
             inputValue: "",
             value: ["apple"],
             items: fruits
@@ -96,6 +98,7 @@ const Page = Html.component({
           props: {
             open: false,
             inline: true,
+            dir,
             inputValue: "",
             value: null,
             items: fruits
@@ -104,16 +107,18 @@ const Page = Html.component({
             h.div.children(combobox.input(h.input), combobox.list(h.div))
         })
       )
-    return mode === "none" ? widgets() : DirectionProvider(h, {
-      props: { direction: "rtl" },
-      view: () =>
-        mode === "nested"
-          ? DirectionProvider(h, {
-            props: { direction: "ltr" },
-            view: widgets
-          })
-          : widgets()
-    })
+    return mode === "none" || mode === "dir" ?
+      widgets() :
+      DirectionProvider(h, {
+        props: { direction: "rtl" },
+        view: () =>
+          mode === "nested"
+            ? DirectionProvider(h, {
+              props: { direction: "ltr" },
+              view: widgets
+            })
+            : widgets()
+      })
   }
 })
 
@@ -144,28 +149,37 @@ it.effect("a DirectionProvider spares every component's CSS direction reads, and
     const root = yield* BrowserHost.mountEffect(Page, {}, app)
     yield* tick
     const tab = (name: string) => app.querySelector<HTMLElement>("." + name)!
+    // The tab ArrowLeft from B lands on: A left to right, C right to left.
     const arrowLeftFromB = function*() {
       tab("b").focus()
       tab("b").dispatchEvent(
         new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true })
       )
       yield* tick
-      return document.activeElement === tab("c") ? "rtl" : "ltr"
+      return values.find((value) => document.activeElement === tab(value))
     }
 
     app.className = "changed"
     for (const input of app.querySelectorAll("input")) input.focus()
     yield* tick
-    assert.strictEqual(yield* arrowLeftFromB(), "rtl")
+    assert.strictEqual(yield* arrowLeftFromB(), "c")
 
     root.send(Message.SetMode({ mode: "nested" }))
     yield* tick
-    assert.strictEqual(yield* arrowLeftFromB(), "ltr")
+    assert.strictEqual(yield* arrowLeftFromB(), "a")
     assert.strictEqual(count.reads, 0)
 
     app.style.direction = "rtl"
     root.send(Message.SetMode({ mode: "none" }))
     yield* tick
-    assert.strictEqual(yield* arrowLeftFromB(), "rtl")
+    assert.isAbove(count.reads, 0)
+    assert.strictEqual(yield* arrowLeftFromB(), "c")
+
+    // Without a remount, a Combobox that loses its `dir` reads CSS again.
+    root.send(Message.SetMode({ mode: "dir" }))
+    yield* tick
+    count.reads = 0
+    root.send(Message.SetMode({ mode: "none" }))
+    yield* tick
     assert.isAbove(count.reads, 0)
   }).pipe(Effect.scoped))
