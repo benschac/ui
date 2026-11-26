@@ -235,6 +235,9 @@ importers:
       '@effect/ui':
         specifier: workspace:*
         version: link:../../packages/ui
+      '@effect/ui-devtools':
+        specifier: workspace:*
+        version: link:../../packages/ui-devtools
       '@effect/ui-kit':
         specifier: workspace:*
         version: link:../../packages/ui-kit

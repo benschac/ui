@@ -1,3 +1,4 @@
+import { DevToolsVite } from "@effect/ui-devtools/node";
 import tailwindcss from "@tailwindcss/vite"
 import { defineConfig, type Plugin } from "vite"
 
@@ -36,5 +37,5 @@ const domainsServer = (): Plugin => ({
 export default defineConfig({
   appType: "custom",
   optimizeDeps: { entries: ["src/entry.client.ts"] },
-  plugins: [tailwindcss(), domainsServer()]
+  plugins: [tailwindcss(), domainsServer(), DevToolsVite.plugin()]
 })

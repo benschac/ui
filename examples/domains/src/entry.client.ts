@@ -6,6 +6,7 @@ import { App } from "./App.ts"
 import { bootstrapConfig } from "./bootstrap.ts"
 import { AppRoute } from "./routes.ts"
 import { Domains } from "./services/Domains.ts"
+import { DevTools } from "@effect/ui-devtools";
 
 const hydrate = Effect.gen(function*() {
   const state = JSON.parse(document.getElementById("state")!.textContent!)
@@ -25,6 +26,8 @@ hydrate.pipe(
   Effect.provide(Layer.mergeAll(
     BrowserRouter.layer({ routes: AppRoute }),
     Domains.layerHttp.pipe(Layer.provide(FetchHttpClient.layer))
+  ).pipe(
+    Layer.provideMerge(DevTools.layer())
   )),
   Effect.runFork
 )

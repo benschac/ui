@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@effect/ui": "workspace:*",
+    "@effect/ui-devtools": "workspace:*",
     "@effect/ui-kit": "workspace:*",
     "effect": "^4.1.4"
   },
