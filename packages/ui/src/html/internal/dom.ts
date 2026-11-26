@@ -119,6 +119,23 @@ const canonicalAttrs = (
 
 const ignore = () => {}
 
+// The nodes a render is taking out of the document. Chromium blurs a focused
+// element in one as it goes. Shared by every host, because `BrowserHost`
+// removes through one host while another one listens.
+const leaving: Array<globalThis.Node> = []
+
+const takingOut = (node: globalThis.Node, f: () => void): void => {
+  leaving.push(node)
+  try {
+    f()
+  } finally {
+    leaving.pop()
+  }
+}
+
+const isLeaving = (target: globalThis.Node): boolean =>
+  leaving.some((node) => node.contains(target))
+
 type Node = globalThis.Node & { $r?: Kernel.Rec }
 
 /** @internal */
@@ -611,7 +628,8 @@ export const makeHost = (
             event,
             target,
             node as globalThis.Element,
-            lastPointer
+            lastPointer,
+            leaving.length > 0 && isLeaving(target)
           )
     )
     if (
@@ -813,15 +831,16 @@ export const makeHost = (
       if (eventOptions.dragstart !== undefined) listen("dragend")
     },
     insert(parent, node, before) {
-      parent.insertBefore(node, before)
+      // Moving a node takes it out first.
+      takingOut(node, () => parent.insertBefore(node, before))
     },
     remove(parent, node) {
       if (shown.size > 0) closeShownIn(node, true)
-      parent.removeChild(node)
+      takingOut(node, () => parent.removeChild(node))
     },
     clear(parent) {
       if (shown.size > 0) closeShownIn(parent, false)
-      parent.textContent = ""
+      takingOut(parent, () => (parent.textContent = ""))
     },
     parentOf: (node) => node.parentNode!,
     nextOf: (node) => node.nextSibling,

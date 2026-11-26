@@ -614,7 +614,7 @@ export interface FocusPayload {
 
 /**
  * The payload of `blur`: whether the element that lost focus is disabled
- * as the event fires.
+ * as the event fires, and whether a render is taking it out of the document.
  *
  * **Details**
  *
@@ -625,17 +625,22 @@ export interface FocusPayload {
  * the components below the disabled element have their new props, so a
  * handler reads it here and not from its own state.
  *
+ * `removed` is `true` only when a render removes or moves the element, or
+ * one around it, while it has focus. Chromium sends `blur` for that, and
+ * Firefox and Safari don't. A host other than the browser may leave it out.
+ *
  * @stability experimental
  * @category events
  * @since 0.1.0
  */
 export interface BlurPayload {
   readonly disabled: boolean
+  readonly removed: boolean
 }
 
 /**
- * The payload of `focusout`: `within`, as for `focusin`, and `disabled`,
- * as for `blur`, read from the descendant that lost focus.
+ * The payload of `focusout`: `within`, as for `focusin`, and `disabled`
+ * and `removed`, as for `blur`, read from the descendant that lost focus.
  *
  * @stability experimental
  * @category events

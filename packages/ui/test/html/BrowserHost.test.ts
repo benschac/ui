@@ -1768,6 +1768,68 @@ describe("BrowserHost", { concurrent: false }, () => {
         ])
       }).pipe(Effect.scoped))
 
+    it.effect("blur and focusout say whether a render removed the element that lost focus", () =>
+      Effect.gen(function*() {
+        const Item = UiSchema.TaggedEnum({
+          Left: { event: Schema.String, removed: Schema.Boolean },
+          Rekeyed: {}
+        })
+        const Items = Html.component({
+          name: "Items",
+          model: Schema.Struct({
+            key: Schema.String,
+            log: Schema.Array(Schema.String)
+          }),
+          message: Item
+        }).make({
+          init: () => ({ key: "a", log: [] as ReadonlyArray<string> }),
+          update: {
+            Left: ($, { event, removed }) =>
+              $.evolve({
+                log: [...$.model.log, `${event}${removed ? " removed" : ""}`]
+              }),
+            Rekeyed: ($) => $.evolve({ key: "b" })
+          },
+          view: (h, { key }) =>
+            h.div.on(
+              "focusout",
+              ({ removed }) => Item.Left({ event: "focusout", removed })
+            ).children(
+              h.button.key(key).on(
+                "blur",
+                ({ removed }) => Item.Left({ event: "blur", removed })
+              )
+            )
+        })
+        // Chromium blurs a focused element as it leaves the document. happy-dom doesn't.
+        const proto = window.Node.prototype
+        const removeChild = proto.removeChild
+        yield* Effect.acquireRelease(
+          Effect.sync(() => {
+            proto.removeChild = function<T extends Node>(this: Node, child: T) {
+              const active = document.activeElement as HTMLElement | null
+              if (active !== null && child.contains(active)) active.blur()
+              return removeChild.call(this, child) as T
+            }
+          }),
+          () => Effect.sync(() => (proto.removeChild = removeChild))
+        )
+        const app = yield* container
+        const root = yield* BrowserHost.mountEffect(Items, {}, app)
+        app.querySelector("button")!.focus()
+        root.send(Item.Rekeyed())
+        yield* tick
+        app.querySelector("button")!.focus()
+        app.querySelector("button")!.blur()
+        yield* tick
+        expect(root.model()!.log).toEqual([
+          "blur removed",
+          "focusout removed",
+          "blur",
+          "focusout"
+        ])
+      }).pipe(Effect.scoped))
+
     it.effect("focus says whether the element shows a focus ring", () =>
       Effect.gen(function*() {
         const Seen = UiSchema.TaggedEnum({

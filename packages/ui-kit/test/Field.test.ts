@@ -118,7 +118,7 @@ describe("Field", () => {
     )
   })
 
-  it.effect("focusWithin keeps focus while it moves inside, touches when it leaves, and ignores disabled blur", () =>
+  it.effect("focusWithin keeps focus while it moves inside, touches when it leaves, and ignores disabled or removed blur", () =>
     Effect.gen(function*() {
       const wrapper = Locator.tag("section")
       const scene = yield* Scene.make(Field, { disabled: true }, {
@@ -142,6 +142,9 @@ describe("Field", () => {
       scene.fire(wrapper, "focusout", { within: true }).expectIgnored()
       assert.deepStrictEqual(state(), ["", undefined])
       scene.fire(wrapper, "focusout", { within: false, disabled: true })
+      assert.deepStrictEqual(state(), [undefined, undefined])
+      scene.fire(wrapper, "focusin")
+      scene.fire(wrapper, "focusout", { within: false, removed: true })
       assert.deepStrictEqual(state(), [undefined, undefined])
       scene.fire(wrapper, "focusin")
       scene.fire(wrapper, "focusout", { within: false })

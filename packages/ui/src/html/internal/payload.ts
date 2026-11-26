@@ -156,7 +156,8 @@ export const payloadOf = (
   event: Event,
   target: EventTarget | null,
   element: globalThis.Element,
-  pointer: Html.PointerType | undefined
+  pointer: Html.PointerType | undefined,
+  removed: boolean
 ): unknown => {
   switch (name) {
     case "click":
@@ -237,7 +238,9 @@ export const payloadOf = (
       return { focusVisible: isFocusVisible(target) }
     case "blur":
       // A window listener's `blur` has no element that lost focus.
-      return target === element ? { disabled: isDisabled(target) } : {}
+      return target === element
+        ? { disabled: isDisabled(target), removed }
+        : {}
     case "focusin":
       return {
         within: containsTarget(element, (event as FocusEvent).relatedTarget)
@@ -245,7 +248,8 @@ export const payloadOf = (
     case "focusout":
       return {
         within: containsTarget(element, (event as FocusEvent).relatedTarget),
-        disabled: isDisabled(target)
+        disabled: isDisabled(target),
+        removed
       }
     default:
       return {}

@@ -55,7 +55,8 @@ const globalEventsOf = (
               event,
               event.target,
               document.documentElement,
-              undefined
+              undefined,
+              false
             ) as object),
           defaultPrevented: event.defaultPrevented
         },
