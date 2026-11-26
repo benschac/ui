@@ -18,7 +18,10 @@ export interface History {
   readonly clear: (session: string, upTo: number) => void
   readonly drop: (session: string) => void
   readonly holds: (session: string, seq: number) => boolean
+  /** A shown entry. */
   readonly entry: (session: string, seq: number) => Entry | undefined
+  /** The last seq recorded, shown or not. */
+  readonly latest: (session: string) => number | undefined
   readonly at: (session: string, seq: number) => State | undefined
   readonly instanceAt: (
     session: string,
@@ -86,7 +89,7 @@ const isDirty = (dirty: ReadonlySet<string>, path: string) => {
 const makeSession = (size: number) => {
   const base = new Map<number, Held>()
   const entries: Array<Entry> = []
-  const shown = new Set<number>()
+  const shown = new Map<number, Entry>()
   const coalesced = new Map<number, Entry>()
   let floor = -Infinity
   let last = -Infinity
@@ -128,25 +131,15 @@ const makeSession = (size: number) => {
       }
       coalesced.clear()
       entries.push(entry)
-      shown.add(entry.seq)
+      shown.set(entry.seq, entry)
       while (shown.size > size) drop()
     },
     clear: (upTo: number) => {
       while (entries.length > 0 && entries[0]!.seq <= upTo) drop()
     },
     holds: (seq: number) => shown.has(seq),
-    entry: (seq: number) => {
-      let low = 0
-      let high = entries.length - 1
-      while (low <= high) {
-        const mid = (low + high) >> 1
-        const at = entries[mid]!.seq
-        if (at === seq) return entries[mid]
-        if (at < seq) low = mid + 1
-        else high = mid - 1
-      }
-      return undefined
-    },
+    entry: (seq: number) => shown.get(seq),
+    latest: () => last,
     at: (seq: number): State => {
       const states = fold(seq)
       const byPath = new Map<string, BrowserHost.Recorded>()
@@ -208,6 +201,7 @@ export const make = (size: number): History => {
     },
     holds: (session, seq) => sessions.get(session)?.holds(seq) ?? false,
     entry: (session, seq) => sessions.get(session)?.entry(seq),
+    latest: (session) => sessions.get(session)?.latest(),
     at: (session, seq) => {
       const held = sessions.get(session)
       return held === undefined || !held.holds(seq) ? undefined : held.at(seq)

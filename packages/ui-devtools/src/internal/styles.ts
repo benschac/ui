@@ -207,10 +207,10 @@ ${markRules}
 .right { overflow: auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; container: detail / inline-size; }
 .ehead { padding: 16px 24px 4px; }
 .ehead-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
-.stop { flex: none; margin: 1px 0 0 auto; padding: 2px 10px; color: var(--muted); white-space: nowrap; }
-.stop:hover { color: var(--ink); }
-.show { flex: none; margin-top: 1px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); white-space: nowrap; }
-.show:hover { color: var(--ink); }
+.stop, .show { flex: none; margin-top: 1px; padding: 2px 10px; color: var(--muted); white-space: nowrap; }
+.stop { margin-left: auto; }
+.show { border: 1px solid var(--line); border-radius: 6px; }
+.stop:hover, .show:hover { color: var(--ink); }
 .show.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }
 .show:disabled { opacity: .5; cursor: default; }
 .headline { font-size: 17px; line-height: 24px; font-weight: 600; overflow-wrap: anywhere; }

@@ -593,7 +593,7 @@ const makeSession = (
 
   return {
     session,
-    frames: () => Array.from(entries.values()),
+    frames: () => entries.values(),
     ingest: (entry: Entry) => {
       if (entry.seq <= last) return
       last = entry.seq
@@ -631,7 +631,7 @@ export const make = (options: {
   readonly isExcluded?: ((entry: Entry) => boolean) | undefined
 }): Inspector.Inspector & {
   /** Every entry held, excluded ones too, oldest first. */
-  readonly frames: (session: string) => ReadonlyArray<Entry>
+  readonly frames: (session: string) => Iterable<Entry>
 } => {
   const size = Math.max(1, options.size ?? 1_000)
   const sessions = new Map<string, ReturnType<typeof makeSession>>()

@@ -151,23 +151,22 @@ const makeInternal = (options: Options, auto: boolean): Layer.Layer<never> =>
       const chosen = load(recordingKey, "sessionStorage")
       const choices = new Map<string, boolean>()
       const stopped = new Set(options.exclude)
+      const choose = (tag: string, recording: boolean) => {
+        choices.set(tag, recording)
+        if (recording) stopped.delete(tag)
+        else stopped.add(tag)
+      }
       if (typeof chosen === "object" && chosen !== null) {
         for (const [tag, recording] of Object.entries(chosen)) {
-          if (typeof recording !== "boolean") continue
-          choices.set(tag, recording)
-          if (recording) stopped.delete(tag)
-          else stopped.add(tag)
+          if (typeof recording === "boolean") choose(tag, recording)
         }
       }
       const isStopped = InspectorInternal.matchTags(stopped)
       const notRecording = () => Array.from(stopped)
       const setRecording = (tag: string, recording: boolean) => {
-        if (recording) stopped.delete(tag)
-        else stopped.add(tag)
-        choices.set(tag, recording)
+        choose(tag, recording)
         save(recordingKey, Object.fromEntries(choices), "sessionStorage")
         changed()
-        return notRecording()
       }
       const savedPosition = load(positionKey)
       let position: Position = isPosition(savedPosition)
@@ -185,9 +184,12 @@ const makeInternal = (options: Options, auto: boolean): Layer.Layer<never> =>
         position: () => position,
         notRecording,
         // The raw message's tag: an encoded one may be under another key.
-        tagAt: (session, seq) => {
+        stoppable: (session, seq) => {
           const entry = history.entry(session, seq)
-          return entry?._tag === "Update" ? tagOf(entry.message) : undefined
+          const tag = entry?._tag === "Update"
+            ? tagOf(entry.message)
+            : undefined
+          return tag === undefined || stopped.has(tag) ? undefined : tag
         }
       }
       const unpause: Effect.Effect<void> = Effect.suspend(() => {
@@ -249,9 +251,7 @@ const makeInternal = (options: Options, auto: boolean): Layer.Layer<never> =>
           }),
         setOpen: (open) => Effect.sync(() => save(openKey, open)),
         setRecording: (tag, recording) =>
-          Effect.sync(() => {
-            setRecording(tag, recording)
-          }),
+          Effect.sync(() => setRecording(tag, recording)),
         setPosition: (next) => Effect.sync(() => setPosition(next))
       })
       const controllables: BrowserHost.Controllables = {
@@ -541,7 +541,6 @@ const makeInternal = (options: Options, auto: boolean): Layer.Layer<never> =>
               : undefined,
           until,
           within: 8_000,
-          latest: (session) => latest.get(session),
           gap: "excluded"
         })
       }

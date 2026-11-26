@@ -17,10 +17,7 @@ export interface Controller {
   ) => Effect.Effect<BrowserHost.Painted | undefined>
   readonly resume: Effect.Effect<void>
   readonly notRecording: () => ReadonlyArray<string>
-  readonly setRecording: (
-    tag: string,
-    recording: boolean
-  ) => ReadonlyArray<string>
+  readonly setRecording: (tag: string, recording: boolean) => void
   readonly changes: Stream.Stream<void>
 }
 
@@ -79,7 +76,7 @@ const messageSchema = (
   })
 
 export const makeHandler = (
-  controller: Omit<Controller, "notRecording" | "changes">
+  controller: Omit<Controller, "changes">
 ): (request: Control.Request) => Effect.Effect<Json, string> => {
   const noRoot = (session: string) =>
     "Session " + session + " has no root on this page."
@@ -118,9 +115,10 @@ export const makeHandler = (
       case "Resume":
         return Effect.as(controller.resume, null)
       case "SetRecording":
-        return Effect.sync(() => [
-          ...controller.setRecording(request.tag, request.recording)
-        ])
+        return Effect.sync(() => {
+          controller.setRecording(request.tag, request.recording)
+          return controller.notRecording()
+        })
       case "MessageSchema":
         return Effect.flatMap(
           target(request.session, request.instance),

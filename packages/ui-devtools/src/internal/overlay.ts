@@ -44,8 +44,8 @@ export interface Feed {
   readonly position: () => Position
   /** The message tags not recorded, when the page has a recorder to change. */
   readonly notRecording?: (() => ReadonlyArray<string>) | undefined
-  /** The message tag the recorder matches for an `Update`. */
-  readonly tagAt?:
+  /** The message tag of an `Update`, while the recorder records it. */
+  readonly stoppable?:
     | ((session: string, seq: number) => string | undefined)
     | undefined
 }
@@ -1763,11 +1763,7 @@ const Inspected = (
     : entry._tag
   const paintable = feed.paintable(entry.session, entry.seq)
   const shown = shows(model, entry.session, entry.seq)
-  const tag = entry._tag === "Update"
-    ? feed.tagAt?.(entry.session, entry.seq)
-    : undefined
-  const stoppable = tag !== undefined &&
-    feed.notRecording?.().includes(tag) === false
+  const tag = feed.stoppable?.(entry.session, entry.seq)
   return [
     h.section.class("ehead").children(
       h.div.class("ehead-top").children(
@@ -1775,7 +1771,7 @@ const Inspected = (
           Name(h, entry, label.text),
           label.detail === undefined ? null : " " + label.detail
         ),
-        stoppable
+        tag !== undefined
           ? h.button.class("stop").attr("aria-label", "Stop recording " + tag)
             .attr(
               "title",
