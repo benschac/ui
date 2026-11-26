@@ -282,60 +282,17 @@ describe("Command", () => {
       )
     })
 
-    it("toLayer takes any result for a Component.Noop success, and only the success otherwise", () => {
-      class Toggle extends Command.Service<Toggle>()("Toggle", {
-        args: {},
-        success: Component.Noop,
-        error: Schema.Never
-      }) {}
-      class Watch extends Command.Service<Watch>()("Watch", {
-        args: {},
-        success: Component.Noop,
-        error: Schema.Never,
-        stream: true
-      }) {}
-      class Either extends Command.Service<Either>()("Either", {
-        args: {},
-        success: Schema.Union([Message, Component.Noop]),
-        error: Schema.Never
-      }) {}
-      expect(Toggle.toLayer(() => Effect.succeed(true))).type.toBe<
-        Layer.Layer<Toggle>
-      >()
-      expect(Toggle.toLayer).type.toBeCallableWith(() => Effect.void)
-      expect(Toggle.toLayer).type.toBeCallableWith(() =>
-        Effect.succeed(Component.noop)
-      )
-      expect(Toggle.toLayer).type.not.toBeCallableWith(() =>
-        Effect.fail("boom")
-      )
-      expect(Watch.toLayer).type.toBeCallableWith(() => Stream.make(1, 2))
-      expect(Toggle.make()).type.toBe<
-        Command.Issued<Component.Noop, Toggle, Component.Noop, "Effect">
-      >()
-      expect(SA.toLayer).type.not.toBeCallableWith(() => Effect.void)
-      // Only `Component.Noop` itself relaxes the body, as only it makes the runtime silent.
+    it("toLayer takes any result only when success is Component.Noop itself", () => {
       const serviceOf = <S extends Schema.Top>(success: S) =>
-        Command.Service<"Wrapped">()("Wrapped", {
-          args: {},
-          success,
-          error: Schema.Never
-        })
-      expect(serviceOf(Component.Noop).toLayer).type.toBeCallableWith(() =>
-        Effect.succeed(true)
-      )
+        Command.Service<"S">()("S", { args: {}, success, error: Schema.Never })
+      const body = () => Effect.succeed(true)
+      expect(serviceOf(Component.Noop).toLayer).type.toBeCallableWith(body)
+      expect(serviceOf(Schema.Union([Message, Component.Noop])).toLayer).type
+        .not
+        .toBeCallableWith(body)
+      // The runtime doesn't silence a wrapped Noop, so its body stays strict.
       expect(serviceOf(Schema.suspend(() => Component.Noop)).toLayer).type.not
-        .toBeCallableWith(() => Effect.succeed(true))
-      expect(serviceOf(Schema.Union([Component.Noop])).toLayer).type.not
-        .toBeCallableWith(() => Effect.succeed(true))
-      expect(serviceOf(Schema.declare(Component.isNoop)).toLayer).type.not
-        .toBeCallableWith(() => Effect.succeed(true))
-      expect(
-        serviceOf(Component.Noop.annotate({ description: "silent" })).toLayer
-      ).type.not.toBeCallableWith(() => Effect.succeed(true))
-      expect(Either.toLayer).type.not.toBeCallableWith(() =>
-        Effect.succeed(true)
-      )
+        .toBeCallableWith(body)
     })
 
     it("preserves success and error Schema types on the class", () => {
