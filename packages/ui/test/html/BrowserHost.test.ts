@@ -1881,8 +1881,8 @@ describe("BrowserHost", { concurrent: false }, () => {
         // Focus a new element moves as it's inserted.
         root.send(Item.Next())
         yield* tick
-        // A move takes the focused input out, then focus the moved element moves as it reconnects.
-        app.querySelector("input")!.focus()
+        // A move takes the focused element out, then it takes focus back and moves it out as it reconnects.
+        app.querySelector<HTMLElement>("x-focus-on-connect")!.focus()
         root.send(Item.Next())
         yield* tick
         expect(root.model()!.log).toEqual([

@@ -145,18 +145,18 @@ const isLeaving = (target: globalThis.Node): boolean =>
   )
 
 /**
- * Runs `f`, which takes `node` out of the document: all of it, only its
- * children, or, for a move, only the element that has focus, since the rest
- * is back in by the time a custom element's `connectedCallback` moves focus.
- * It counts only when focus was inside before `f`, so a first insertion
- * doesn't.
+ * Runs `f`, which takes `node` out of the document, or only its children
+ * when `kept`. It counts only when focus was inside before `f`, so a first
+ * insertion doesn't. A move (`moved`) counts only until focus is back
+ * inside, so focus a custom element's `connectedCallback` takes and then
+ * moves out is a real exit.
  */
 const takingOut = (
   node: globalThis.Node,
-  scope: "node" | "children" | "focused",
+  how: "removed" | "kept" | "moved",
   f: () => void
 ): void => {
-  const kept = scope === "children"
+  const kept = how === "kept"
   const focused = node.isConnected
     ? (node.getRootNode() as Document | ShadowRoot).activeElement
     : null
@@ -164,11 +164,18 @@ const takingOut = (
     focused === null || focused === undefined || (kept && focused === node) ||
     !node.contains(focused)
   ) return f()
-  leaving.push({ node: scope === "focused" ? focused : node, kept })
+  const entry = { node, kept }
+  const back = () => {
+    const at = leaving.indexOf(entry)
+    if (at >= 0) leaving.splice(at, 1)
+  }
+  leaving.push(entry)
+  if (how === "moved") node.addEventListener("focusin", back, true)
   try {
     f()
   } finally {
-    leaving.pop()
+    back()
+    if (how === "moved") node.removeEventListener("focusin", back, true)
   }
 }
 
@@ -869,16 +876,16 @@ export const makeHost = (
     },
     insert(parent, node, before) {
       // Moving a node takes it out first.
-      takingOut(node, "focused", () => parent.insertBefore(node, before))
+      takingOut(node, "moved", () => parent.insertBefore(node, before))
     },
     remove(parent, node) {
-      takingOut(node, "node", () => {
+      takingOut(node, "removed", () => {
         if (shown.size > 0) closeShownIn(node, true)
         parent.removeChild(node)
       })
     },
     clear(parent) {
-      takingOut(parent, "children", () => {
+      takingOut(parent, "kept", () => {
         if (shown.size > 0) closeShownIn(parent, false)
         parent.textContent = ""
       })
