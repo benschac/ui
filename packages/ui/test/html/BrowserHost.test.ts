@@ -1821,64 +1821,53 @@ describe("BrowserHost", { concurrent: false }, () => {
               )
             )
         })
-        const outside = document.body.appendChild(
-          document.createElement("button")
-        )
         // Chromium blurs a focused element as it leaves the document, also to move, and a closing modal returns focus.
-        // happy-dom does none of it.
+        // happy-dom does none of it, nor retargets an event from a shadow root to its host.
         const proto = window.Node.prototype
         const { insertBefore, removeChild } = proto
-        const close = vi.spyOn(window.HTMLDialogElement.prototype, "close")
-        yield* Effect.acquireRelease(
-          Effect.sync(() => {
-            proto.removeChild = function<T extends Node>(this: Node, child: T) {
-              const active = document.activeElement as HTMLElement | null
-              const inner = active?.shadowRoot?.activeElement
-              if (active === null || !child.contains(active)) {
-                // Not focused.
-              } else if (inner === null || inner === undefined) active.blur()
-              else {
-                // happy-dom doesn't retarget an event from a shadow root to its host, so the host sends it.
-                const path: Array<EventTarget> = [inner, active.shadowRoot!]
-                for (let at: Node | null = active; at; at = at.parentNode) {
-                  path.push(at)
-                }
-                for (const type of ["blur", "focusout"]) {
-                  const event = new FocusEvent(type, {
-                    bubbles: type === "focusout",
-                    composed: true
-                  })
-                  Object.defineProperty(event, "composedPath", {
-                    value: () => [...path, window]
-                  })
-                  active.dispatchEvent(event)
-                }
-              }
+        const blurIn = (node: Node) => {
+          const active = document.activeElement as HTMLElement | null
+          if (active === null || !node.contains(active)) return
+          const inner = active.shadowRoot?.activeElement
+          if (!inner) return active.blur()
+          for (const type of ["blur", "focusout"]) {
+            const event = new FocusEvent(type, {
+              bubbles: type === "focusout",
+              composed: true
+            })
+            const path = event.composedPath.bind(event)
+            Object.defineProperty(event, "composedPath", {
+              value: () => [inner, active.shadowRoot!, ...path()]
+            })
+            active.dispatchEvent(event)
+          }
+        }
+        const spies = [
+          vi.spyOn(proto, "removeChild").mockImplementation(
+            function<T extends Node>(this: Node, child: T) {
+              blurIn(child)
               return removeChild.call(this, child) as T
             }
-            proto.insertBefore = function<T extends Node>(
-              this: Node,
-              node: T,
-              child: Node | null
-            ) {
-              const active = document.activeElement as HTMLElement | null
-              if (
-                node.isConnected && active !== null && node.contains(active)
-              ) {
-                active.blur()
-              }
+          ),
+          vi.spyOn(proto, "insertBefore").mockImplementation(
+            function<T extends Node>(this: Node, node: T, child: Node | null) {
+              if (node.isConnected) blurIn(node)
               return insertBefore.call(this, node, child) as T
             }
-            close.mockImplementation(() =>
+          ),
+          vi.spyOn(window.HTMLDialogElement.prototype, "close")
+            .mockImplementation(() =>
               document.getElementById("opener")!.focus()
             )
-          }),
-          () =>
+        ]
+        const outside = yield* Effect.acquireRelease(
+          Effect.sync(() =>
+            document.body.appendChild(document.createElement("button"))
+          ),
+          (button) =>
             Effect.sync(() => {
-              proto.removeChild = removeChild
-              proto.insertBefore = insertBefore
-              close.mockRestore()
-              outside.remove()
+              for (const spy of spies) spy.mockRestore()
+              button.remove()
             })
         )
         customElements.define(
