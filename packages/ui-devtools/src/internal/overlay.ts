@@ -44,6 +44,10 @@ export interface Feed {
   readonly position: () => Position
   /** The message tags not recorded, when the page has a recorder to change. */
   readonly notRecording?: (() => ReadonlyArray<string>) | undefined
+  /** The message tag the recorder matches for an `Update`. */
+  readonly tagAt?:
+    | ((session: string, seq: number) => string | undefined)
+    | undefined
 }
 
 export class Pages extends Context.Service<Pages, {
@@ -1759,7 +1763,9 @@ const Inspected = (
     : entry._tag
   const paintable = feed.paintable(entry.session, entry.seq)
   const shown = shows(model, entry.session, entry.seq)
-  const tag = entry._tag === "Update" ? Read.tagOf(entry.message) : undefined
+  const tag = entry._tag === "Update"
+    ? feed.tagAt?.(entry.session, entry.seq)
+    : undefined
   const stoppable = tag !== undefined &&
     feed.notRecording?.().includes(tag) === false
   return [

@@ -18,6 +18,7 @@ export interface History {
   readonly clear: (session: string, upTo: number) => void
   readonly drop: (session: string) => void
   readonly holds: (session: string, seq: number) => boolean
+  readonly entry: (session: string, seq: number) => Entry | undefined
   readonly at: (session: string, seq: number) => State | undefined
   readonly instanceAt: (
     session: string,
@@ -134,6 +135,18 @@ const makeSession = (size: number) => {
       while (entries.length > 0 && entries[0]!.seq <= upTo) drop()
     },
     holds: (seq: number) => shown.has(seq),
+    entry: (seq: number) => {
+      let low = 0
+      let high = entries.length - 1
+      while (low <= high) {
+        const mid = (low + high) >> 1
+        const at = entries[mid]!.seq
+        if (at === seq) return entries[mid]
+        if (at < seq) low = mid + 1
+        else high = mid - 1
+      }
+      return undefined
+    },
     at: (seq: number): State => {
       const states = fold(seq)
       const byPath = new Map<string, BrowserHost.Recorded>()
@@ -194,6 +207,7 @@ export const make = (size: number): History => {
       sessions.delete(session)
     },
     holds: (session, seq) => sessions.get(session)?.holds(seq) ?? false,
+    entry: (session, seq) => sessions.get(session)?.entry(seq),
     at: (session, seq) => {
       const held = sessions.get(session)
       return held === undefined || !held.holds(seq) ? undefined : held.at(seq)

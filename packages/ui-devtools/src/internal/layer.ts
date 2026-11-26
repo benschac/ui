@@ -12,7 +12,7 @@ import * as Control from "./control.ts"
 import * as History from "./history.ts"
 import * as InspectorInternal from "./inspector.ts"
 import { type Feed, mountOverlay, Pages, type Position } from "./overlay.ts"
-import { isFailure } from "./read.ts"
+import { isFailure, tagOf } from "./read.ts"
 import * as Remote from "./remote.ts"
 import { styles } from "./styles.ts"
 import * as Tools from "./tools.ts"
@@ -149,20 +149,23 @@ const makeInternal = (options: Options, auto: boolean): Layer.Layer<never> =>
       }
       // Choices made at runtime override `exclude` for the rest of the tab.
       const chosen = load(recordingKey, "sessionStorage")
-      const choices: Record<string, unknown> =
-        typeof chosen === "object" && chosen !== null ? { ...chosen } : {}
+      const choices = new Map<string, boolean>()
       const stopped = new Set(options.exclude)
-      for (const [tag, recording] of Object.entries(choices)) {
-        if (recording === true) stopped.delete(tag)
-        else if (recording === false) stopped.add(tag)
+      if (typeof chosen === "object" && chosen !== null) {
+        for (const [tag, recording] of Object.entries(chosen)) {
+          if (typeof recording !== "boolean") continue
+          choices.set(tag, recording)
+          if (recording) stopped.delete(tag)
+          else stopped.add(tag)
+        }
       }
       const isStopped = InspectorInternal.matchTags(stopped)
       const notRecording = () => Array.from(stopped)
       const setRecording = (tag: string, recording: boolean) => {
         if (recording) stopped.delete(tag)
         else stopped.add(tag)
-        choices[tag] = recording
-        save(recordingKey, choices, "sessionStorage")
+        choices.set(tag, recording)
+        save(recordingKey, Object.fromEntries(choices), "sessionStorage")
         changed()
         return notRecording()
       }
@@ -180,7 +183,12 @@ const makeInternal = (options: Options, auto: boolean): Layer.Layer<never> =>
         failures: () => failures,
         open: load(openKey) === true,
         position: () => position,
-        notRecording
+        notRecording,
+        // The raw message's tag: an encoded one may be under another key.
+        tagAt: (session, seq) => {
+          const entry = history.entry(session, seq)
+          return entry?._tag === "Update" ? tagOf(entry.message) : undefined
+        }
       }
       const unpause: Effect.Effect<void> = Effect.suspend(() => {
         const was = paused

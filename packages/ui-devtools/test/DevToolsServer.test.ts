@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import * as NodeHttpClient from "@effect/platform-node/NodeHttpClient"
 import * as NodeHttpServer from "@effect/platform-node/NodeHttpServer"
-import { DevTools } from "@effect/ui-devtools"
+import { DevTools, Inspector } from "@effect/ui-devtools"
 import * as Mcp from "@effect/ui-devtools/internal/mcp"
 import * as Remote from "@effect/ui-devtools/internal/remote"
 import * as Server from "@effect/ui-devtools/internal/server"
@@ -158,6 +158,22 @@ const connectSocket = (url: string) =>
 const at = { session: "s", at: 0, path: "/App", instance: 1, component: "App" }
 const propsAt = (seq: number) =>
   JSON.stringify({ _tag: "PropsChanged", ...at, seq, props: { seq } })
+
+const updateAt = (seq: number, excluded: boolean) =>
+  JSON.stringify({
+    _tag: "Update",
+    ...at,
+    seq,
+    source: { _tag: "DomEvent", name: "click" },
+    message: { _tag: excluded ? "Ticked" : "Clicked" },
+    props: {},
+    model: { seq },
+    commands: [],
+    events: [],
+    lists: [],
+    sends: [],
+    ...(excluded ? { excluded: true } : {})
+  })
 
 const fakePage = Effect.fnUntraced(function*(
   url: string,
@@ -897,6 +913,43 @@ describe("DevToolsServer", { concurrent: false }, () => {
         assert.strictEqual(session.paused, 0)
         log.close()
         control.close()
+      }).pipe(Effect.scoped),
+    30_000
+  )
+
+  it.live(
+    "holds an excluded update as arrived, and replays it to a late viewer as the next diff's baseline",
+    () =>
+      Effect.gen(function*() {
+        const { agent, url } = yield* serveFast(47756, 1_000)
+        const log = yield* fakePage(url, (log) =>
+          Effect.sync(() => {
+            log.send(updateAt(2, true))
+            return { _tag: "Updated", seq: 2 } as const
+          }))
+        const sent = yield* agent.call("dispatch", {
+          session: "s",
+          instance: 1,
+          messages: go(1)
+        })
+        assert.isUndefined(sent.unseen)
+        assert.isUndefined(sent.unavailable)
+
+        log.send(updateAt(3, false))
+        yield* wait(100)
+        const watch = yield* connectSocket(
+          url.replace("http", "ws") + "/watch"
+        )
+        yield* Effect.addFinalizer(() => Effect.sync(() => watch.close()))
+        const frames: Array<any> = []
+        watch.addEventListener("message", (event) => {
+          const frame = JSON.parse(String(event.data))
+          if (frame._tag !== "Held") frames.push(frame)
+        })
+        yield* until(() => frames.some((frame) => frame.seq === 3))
+        const viewer = Inspector.make()
+        viewer.ingest(frames)
+        assert.strictEqual(viewer.sessions()[0]!.previous(3)?.seq, 2)
       }).pipe(Effect.scoped),
     30_000
   )

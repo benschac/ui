@@ -31,6 +31,7 @@ interface Meta {
   host: MessageLog.WireHost | undefined
   connected: boolean
   closed: number
+  latest?: number | undefined
   started?: MessageLog.WireEntry | undefined
 }
 
@@ -115,16 +116,16 @@ export const make = (options: Options) => {
               host = frame.host
               continue
             }
-            if (!sessions.has(frame.session)) {
-              sessions.add(frame.session)
-              const known = meta.get(frame.session)
-              if (known === undefined) {
-                meta.set(frame.session, { host, connected: true, closed: 0 })
-              } else known.connected = true
-            }
-            if (frame._tag === "SessionStarted") {
-              meta.get(frame.session)!.started = frame
-            }
+            let known = meta.get(frame.session)
+            if (known === undefined) {
+              meta.set(
+                frame.session,
+                known = { host, connected: true, closed: 0 }
+              )
+            } else if (!sessions.has(frame.session)) known.connected = true
+            sessions.add(frame.session)
+            known.latest = Math.max(known.latest ?? -1, frame.seq)
+            if (frame._tag === "SessionStarted") known.started = frame
             batch.push(frame)
             broadcast(chunk)
           }
@@ -244,7 +245,8 @@ export const make = (options: Options) => {
         if (started !== undefined) {
           Queue.offerUnsafe(outbox, JSON.stringify(started))
         }
-        for (const frame of session.entries()) {
+        // Excluded frames too, so the viewer's diffs match a live one's.
+        for (const frame of inspector.frames(session.id)) {
           Queue.offerUnsafe(outbox, JSON.stringify(frame))
         }
       }
@@ -268,9 +270,7 @@ export const make = (options: Options) => {
       Array.from(pages).reverse().find((page) => page.sessions.has(session)),
     until,
     within: Math.round(timeout * 0.8),
-    latest: (id) =>
-      inspector.sessions().find((session) => session.id === id)?.entries()
-        .at(-1)?.seq,
+    latest: (id) => meta.get(id)?.latest,
     gap: "skipped"
   }
   return { server, routes: Layer.mergeAll(log, control, watch) }

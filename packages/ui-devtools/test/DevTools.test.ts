@@ -293,6 +293,23 @@ describe("DevTools overlay", { concurrent: false }, () => {
           })
         )
         assert.isFalse(clear().disabled)
+
+        // Stop recording reads the raw message's tag, not the encoded "kind".
+        yield* click(
+          HtmlLocator.getByRole(root, "button", {
+            name: "Start recording Move"
+          })
+        )
+        yield* click(move)
+        yield* click(root.querySelector(".row-button")!)
+        yield* click(
+          HtmlLocator.getByRole(root, "button", { name: "Stop recording Move" })
+        )
+        assert.isDefined(
+          HtmlLocator.getByRole(root, "button", {
+            name: "Start recording Move"
+          })
+        )
       }))
       localStorage.clear()
 
