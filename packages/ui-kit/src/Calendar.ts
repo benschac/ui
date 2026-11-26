@@ -596,16 +596,14 @@ export const Calendar = Html.component({
       weekdays,
       month: monthStart,
       title,
-      root: p.part((b) =>
-        b
-          .attrs({ tabindex: "-1", ...state })
-          .ref(CalendarRootRef)
-          .onMount(
-            TrackDirection({ css: p.reads.provider === undefined }).pipe(
-              Mount.map((rtl) => CalendarMessage.FoundDirection({ rtl }))
-            )
+      root: p.part((b) => {
+        const root = b.attrs({ tabindex: "-1", ...state }).ref(CalendarRootRef)
+        return p.reads.provider !== undefined ? root : root.onMount(
+          TrackDirection().pipe(
+            Mount.map((rtl) => CalendarMessage.FoundDirection({ rtl }))
           )
-      ),
+        )
+      }),
       heading: p.part((b) =>
         b.attrs({
           id: headingId,

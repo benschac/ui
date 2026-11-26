@@ -645,17 +645,19 @@ export const Toolbar = Html.component({
       disabled,
       orientation,
       isDisabled,
-      root: p.part("div", (b) =>
-        b.attrs({
+      root: p.part("div", (b) => {
+        const root = b.attrs({
           role: "toolbar",
           "aria-orientation": orientation,
           "data-orientation": orientation,
           "data-disabled": flag(disabled)
-        }).onMount(
-          TrackDirection({ css: p.reads.provider === undefined }).pipe(
+        })
+        return p.reads.provider !== undefined ? root : root.onMount(
+          TrackDirection().pipe(
             Mount.map((rtl) => ToolbarMessage.FoundDirection({ rtl }))
           )
-        )),
+        )
+      }),
       group: View.wrapPart(
         groupPart,
         <B extends View.PartTarget<"div">>(

@@ -1219,14 +1219,14 @@ export const OTPField = Html.component({
       disabled,
       readOnly,
       required,
-      root: p.part((b) =>
-        state(b)
+      root: p.part((b) => {
+        const root = state(b)
           .attrs({ role: "group", "data-filled": flag(filled) })
-          .onMount(
-            TrackDirection({ css: p.reads.provider === undefined }).pipe(
-              Mount.map((rtl) => OTPFieldMessage.FoundDirection({ rtl }))
-            )
+        return (p.reads.provider !== undefined ? root : root.onMount(
+          TrackDirection().pipe(
+            Mount.map((rtl) => OTPFieldMessage.FoundDirection({ rtl }))
           )
+        ))
           .forward((node) => {
             const built = View.build(node, [
               ...positions,
@@ -1248,7 +1248,7 @@ export const OTPField = Html.component({
               label
             )
           })
-      ),
+      }),
       input: View.wrapPart(
         slot,
         <B extends View.PartTarget<"input">>(

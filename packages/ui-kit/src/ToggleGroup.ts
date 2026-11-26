@@ -416,12 +416,15 @@ export const ToggleGroup = Html.component({
           "data-disabled": flag(disabled),
           "data-multiple": flag(multiple)
         })
-        // In a toolbar the toolbar's keys move focus.
-        return toolbar !== undefined ? root : root.onMount(
-          TrackDirection({ css: p.reads.provider === undefined }).pipe(
-            Mount.map((rtl) => ToggleGroupMessage.FoundDirection({ rtl }))
+        // In a toolbar the toolbar's keys move focus, and a provider decides
+        // the direction.
+        return toolbar !== undefined || p.reads.provider !== undefined
+          ? root
+          : root.onMount(
+            TrackDirection().pipe(
+              Mount.map((rtl) => ToggleGroupMessage.FoundDirection({ rtl }))
+            )
           )
-        )
       }),
       item: valued(item)
     }

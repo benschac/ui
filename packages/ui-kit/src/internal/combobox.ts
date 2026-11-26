@@ -35,7 +35,6 @@ import {
 import {
   type Directed,
   isRtl,
-  provided,
   rightToLeft,
   watchDirectionWhile
 } from "./direction.ts"
@@ -1860,9 +1859,7 @@ export const make = <P, E>(
         .onMount(
           TrackComboboxChips({
             owner,
-            rtl: props.dir !== undefined
-              ? props.dir === "rtl"
-              : provided(p.reads.provider),
+            rtl: css ? null : chipsRtl,
             css,
             locked: disabled || readOnly
           })
