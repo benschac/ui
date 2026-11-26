@@ -659,7 +659,18 @@ class StepsImpl extends internal.SceneCursor {
 export const make: {
   <C extends AnyComponent>(
     component: C,
-    props: Component.Props<C>
+    props: Component.Props<C>,
+    options?: {
+      /**
+       * The children this scene runs instead of leaving them as leaves, by their
+       * component. Each shows its view against its own Model, a handler or a
+       * mount in it sends to its `update`, and its events reach the component
+       * that wrote it through `onEmit`. Its Subscriptions don't run, and a
+       * Command, a query or slots in one fail the step: test those in the
+       * child's own Story or Scene, or in a Play.
+       */
+      readonly run?: ReadonlyArray<Component.Any> | undefined
+    }
   ): Effect.Effect<Steps<C>, never, Scope.Scope>
   <C extends AnyComponent, V extends View.Elements = never>(
     component: C,
@@ -671,6 +682,7 @@ export const make: {
           & View.Helper<never, unknown>
           & View.Tags<[V] extends [never] ? VocabularyOf<C> : V, never>
       ) => { readonly [K in Component.Slots<C>]?: View.Input<never, any> }
+      readonly run?: ReadonlyArray<Component.Any> | undefined
     }
   ): Effect.Effect<Steps<C>, never, Scope.Scope>
   <Props, Events, Parts, R, Rcv, V extends View.Elements = never>(
@@ -703,7 +715,11 @@ export const make: {
  * @since 0.1.0
  */
 export const start: {
-  <C extends AnyComponent>(component: C, props: Component.Props<C>): Steps<C>
+  <C extends AnyComponent>(
+    component: C,
+    props: Component.Props<C>,
+    options?: { readonly run?: ReadonlyArray<Component.Any> | undefined }
+  ): Steps<C>
   <Props, Events, Parts, R, Rcv, V extends View.Elements = never>(
     component: Component.Headless<Props, Events, Parts, R, Rcv>,
     props: Props,

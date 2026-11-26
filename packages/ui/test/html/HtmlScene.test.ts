@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { Mount, UiSchema } from "@effect/ui"
+import { Command, Component, Mount, UiSchema } from "@effect/ui"
 import { BrowserHost, Html } from "@effect/ui/html"
 import { HtmlLocator, HtmlScene } from "@effect/ui/html/testing"
 import { Locator } from "@effect/ui/testing"
@@ -677,4 +677,186 @@ describe("HtmlScene", () => {
         slotScene.click("Move").expect(log).toHaveText("slot1-md")
       }))
   })
+})
+
+describe("HtmlScene children it runs", () => {
+  const Focus = Mount.make(
+    "Focus",
+    { args: {} },
+    (node: HTMLElement) => Effect.sync(() => node.tagName)
+  )
+  const CounterMessage = UiSchema.TaggedEnum({
+    ClickedAdd: {},
+    CompletedFocus: { tag: Schema.String }
+  })
+  const CounterEvents = UiSchema.TaggedEnum({
+    Counted: { count: Schema.Number }
+  })
+  const Counter = Html.component({
+    name: "Counter",
+    props: Schema.Struct({ label: Schema.String }),
+    model: Schema.Struct({ count: Schema.Number, focused: Schema.String }),
+    message: CounterMessage,
+    events: CounterEvents
+  }).make({
+    init: () => ({ count: 0, focused: "" }),
+    update: {
+      ClickedAdd: ($) =>
+        $.evolve({ count: $.model.count + 1 }).emit(
+          CounterEvents.Counted({ count: $.model.count + 1 })
+        ),
+      CompletedFocus: ($, { tag }) => $.evolve({ focused: tag })
+    },
+    view: (h, model) =>
+      h.div(
+        h.button
+          .onMount(
+            Focus().pipe(
+              Mount.map((tag) => CounterMessage.CompletedFocus({ tag }))
+            )
+          )
+          .on("click", CounterMessage.ClickedAdd())
+          .children(`${h.props.label} ${model.count}`),
+        h.p(model.focused)
+      )
+  })
+  const PageMessage = UiSchema.TaggedEnum({
+    CountedCounter: { count: Schema.Number }
+  })
+  const Page = Html.component({
+    name: "Page",
+    model: Schema.Number,
+    message: PageMessage
+  }).make({
+    init: () => 0,
+    update: { CountedCounter: (_, { count }) => count },
+    view: (h, heard) =>
+      h.main(
+        Counter(h, {
+          props: { label: "add" },
+          onEmit: (event) => PageMessage.CountedCounter({ count: event.count })
+        }),
+        h.output(String(heard))
+      )
+  })
+
+  it.effect("run renders a child's view, sends its clicks to its update, its events to onEmit, and names its mounts", () =>
+    Effect.gen(function*() {
+      const scene = yield* HtmlScene.make(Page, {}, { run: [Counter] })
+      scene
+        .mounted(Focus, "BUTTON")
+        .expect(Locator.tag("p")).toHaveText("BUTTON")
+        .click("add 0")
+        .expect(HtmlLocator.role("button")).toHaveText("add 1")
+        .expect(Locator.tag("output")).toHaveText("1")
+    }))
+
+  it.effect("without run, a child is a leaf: its view isn't shown and childEmit stands in for it", () =>
+    Effect.gen(function*() {
+      const scene = yield* HtmlScene.make(Page, {})
+      scene.expect(Locator.text("add 0")).toBeAbsent()
+        .childEmit(Counter, CounterEvents.Counted({ count: 3 }))
+        .expect(Locator.tag("output")).toHaveText("3")
+    }))
+  it.effect("a child it runs starts again with its init once the view places it again", () =>
+    Effect.gen(function*() {
+      const Toggle = Html.component({
+        name: "Toggle",
+        model: Schema.Boolean,
+        message: Schema.Boolean
+      }).make({
+        init: () => true,
+        update: (_, shown) => shown,
+        view: (h, shown) =>
+          h.div(
+            h.button.on("click", !shown).children(shown ? "hide" : "show"),
+            shown && Counter(h, { props: { label: "add" } })
+          )
+      })
+      const scene = yield* HtmlScene.make(Toggle, {}, { run: [Counter] })
+      scene.mounted(Focus, "BUTTON").click("add 0").click("hide").click("show")
+        .mounted(Focus, "BUTTON")
+        .expect(Locator.text("add 0")).toExist()
+    }))
+
+  it.effect("a Command a child it runs starts fails the step", () =>
+    Effect.gen(function*() {
+      class Save extends Command.Service<Save>()("test/Save", {
+        args: {},
+        success: Schema.Literal("ClickedSave")
+      }) {}
+      const Saver = Html.component({
+        name: "Saver",
+        model: Schema.Null,
+        message: Schema.Literal("ClickedSave")
+      }).make({
+        init: () => null,
+        update: ($) => $.run(Save.make({})),
+        view: (h) => h.button.on("click", "ClickedSave").children("save")
+      })
+      const Host = Html.component({
+        name: "Host",
+        model: Schema.Null,
+        message: Schema.Never
+      }).make({
+        init: () => null,
+        update: ($) => $.model,
+        view: (h) => h.main(Saver(h, {}))
+      })
+      const scene = yield* HtmlScene.make(Host, {}, { run: [Saver] })
+      assert.throws(
+        () => scene.click("save"),
+        /^HtmlScene\.click: \/Host\/Saver\[\] started test\/Save, and a scene doesn't run a child's Commands/
+      )
+    }))
+  it.effect("a child it runs reads the owner above it, and its sends are acknowledged with sent", () =>
+    Effect.gen(function*() {
+      const PickMessage = UiSchema.TaggedEnum({ Picked: { id: Schema.String } })
+      const Selection = Component.define({
+        name: "Selection",
+        props: Schema.Struct({ current: Schema.String }),
+        model: Schema.Null,
+        message: PickMessage,
+        shares: { value: ({ props }) => props.current, receives: ["Picked"] }
+      }).make({ init: () => null, update: ($) => $.model, parts: () => ({}) })
+      const Item = Html.component({
+        name: "Item",
+        props: Schema.Struct({ id: Schema.String }),
+        model: Schema.Null,
+        message: PickMessage,
+        reads: { selection: Selection }
+      }).make({
+        init: () => null,
+        update: ($, message) => $.send(Selection, message),
+        view: (h) =>
+          h.button
+            .attr("aria-pressed", String(h.reads.selection === h.props.id))
+            .on("click", PickMessage.Picked({ id: h.props.id }))
+            .children(h.props.id)
+      })
+      const List = Html.component({
+        name: "List",
+        model: Schema.Null,
+        message: Schema.Never
+      }).make({
+        init: () => null,
+        update: ($) => $.model,
+        view: (h) =>
+          Selection(h, {
+            props: { current: "b" },
+            view: () =>
+              h.ul(
+                ["a", "b"].map((id) =>
+                  h.li.key(id).children(Item(h, { key: id, props: { id } }))
+                )
+              )
+          })
+      })
+      const scene = yield* HtmlScene.make(List, {}, { run: [Item] })
+      scene
+        .expect(Locator.text("b")).toHaveAttribute("aria-pressed", "true")
+        .expect(Locator.text("a")).toHaveAttribute("aria-pressed", "false")
+        .click("a")
+        .sent(Selection, PickMessage.Picked({ id: "a" }))
+    }))
 })
