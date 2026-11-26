@@ -753,9 +753,9 @@ export interface Service<
   /** Builds a Layer providing this Command's implementation. */
   toLayer<LE = never, LR = never>(
     build:
-      | Service.Implementation<Args, Success["Type"], IsStream, Error["Type"]>
+      | Service.Body<Args, Success["Type"], IsStream, Error["Type"]>
       | Effect.Effect<
-        Service.Implementation<Args, Success["Type"], IsStream, Error["Type"]>,
+        Service.Body<Args, Success["Type"], IsStream, Error["Type"]>,
         LE,
         LR
       >
@@ -799,20 +799,24 @@ export declare namespace Service {
    */
   export type Implementation<Args, A, IsStream extends boolean, Err = never> =
     IsStream extends true ?
-      (args: Args) => Stream.Stream<Result<A>, Err, FrameworkService>
-      : (args: Args) => Effect.Effect<Result<A>, Err, FrameworkService>
+      (args: Args) => Stream.Stream<A, Err, FrameworkService>
+      : (args: Args) => Effect.Effect<A, Err, FrameworkService>
 
   /**
-   * What a body returns for a success of `A`: anything when `A` is
-   * `Component.Noop`, since the runtime then ends every run with
-   * `Component.noop`, and `A` otherwise.
+   * The body `toLayer` takes: an `Implementation` whose result may be
+   * anything when `A` is exactly `Component.Noop`, since `toLayer` then maps
+   * it to `Component.noop`.
    *
    * @category models
    * @since 0.1.0
    */
-  export type Result<A> = [Component.Noop] extends [A] ?
-    [A] extends [Component.Noop] ? unknown : A
-    : A
+  export type Body<Args, A, IsStream extends boolean, Err = never> =
+    Implementation<
+      Args,
+      Types.EqualsWith<A, Component.Noop, unknown, A>,
+      IsStream,
+      Err
+    >
 
   /**
    * The options accepted by `Service`.
@@ -1300,15 +1304,20 @@ export const Service: <Self>() => {
   const { error, invalidates, optimistic, stream, success, writes } = options
   const service = Base as Effect.Effect<(args: unknown) => any, never, any>
   const silent = internalNoop.isNoopSchema(success)
+  const silence = (run: (args: any) => any) => (args: any) =>
+    stream
+      ? Stream.as(run(args), internalNoop.noop)
+      : Effect.as(run(args), internalNoop.noop)
   class CommandService extends Base {
     static readonly success = success
     static readonly error = error
     static toLayer(
       build: ((args: any) => any) | Effect.Effect<(args: any) => any, any, any>
     ): Layer.Layer<any, any, any> {
-      return Effect.isEffect(build)
-        ? Layer.effect(Base, build)
-        : Layer.succeed(Base, build)
+      if (Effect.isEffect(build)) {
+        return Layer.effect(Base, silent ? Effect.map(build, silence) : build)
+      }
+      return Layer.succeed(Base, silent ? silence(build) : build)
     }
   }
   return Object.assign(
@@ -1321,16 +1330,8 @@ export const Service: <Self>() => {
         ? undefined
         : (value) => writes(value, args),
       work: stream
-        ? Stream.unwrap(
-          Effect.map(service, (run) => {
-            const work = run(args)
-            return silent ? Stream.as(work, internalNoop.noop) : work
-          })
-        )
-        : Effect.flatMap(service, (run) => {
-          const work = run(args)
-          return silent ? Effect.as(work, internalNoop.noop) : work
-        })
+        ? Stream.unwrap(Effect.map(service, (run) => run(args)))
+        : Effect.flatMap(service, (run) => run(args))
     }))
   )
 }
