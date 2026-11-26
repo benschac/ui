@@ -186,6 +186,8 @@ const fakePage = Effect.fnUntraced(function*(
     paused: () => undefined,
     paint: () => Effect.succeed(undefined),
     resume: Effect.void,
+    notRecording: () => [],
+    setRecording: () => [],
     changes: Stream.never
   }).pipe(Effect.provide(Socket.layerWebSocketConstructorGlobal))
   yield* wait(100)

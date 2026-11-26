@@ -22,10 +22,7 @@ export const mount = (
   options: { readonly server: string; readonly size: number }
 ): Effect.Effect<void, never, Scope.Scope> =>
   Effect.gen(function*() {
-    const inspector = InspectorInternal.make({
-      size: options.size,
-      isExcluded: () => false
-    })
+    const inspector = InspectorInternal.make({ size: options.size })
     const origins = new Map<string, number>()
     const changes = yield* PubSub.sliding<void>(1)
     const feed: Feed = {
@@ -46,6 +43,7 @@ export const mount = (
           inspector.sessions().find((session) => session.id === id)?.clear()
         ),
       setOpen: () => Effect.void,
+      setRecording: () => Effect.void,
       setPosition: () => Effect.void
     })
     yield* mountOverlay(container, feed, pages)

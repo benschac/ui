@@ -143,7 +143,7 @@ export const matchTags =
 const makeSession = (
   id: string,
   size: number,
-  isExcluded: (entry: Entry) => boolean
+  isExcluded: ((entry: Entry) => boolean) | undefined
 ) => {
   const entries = new Map<number, Entry>()
   const hidden = new Set<number>()
@@ -596,7 +596,10 @@ const makeSession = (
     ingest: (entry: Entry) => {
       if (entry.seq <= last) return
       last = entry.seq
-      if (entry._tag === "Update" && isExcluded(entry)) {
+      if (
+        entry._tag === "Update" &&
+        (entry.excluded === true || isExcluded?.(entry) === true)
+      ) {
         const replaced = coalesced.get(entry.instance)
         if (replaced !== undefined) {
           const inst = instances.get(entry.instance)
@@ -624,7 +627,7 @@ const makeSession = (
 
 export const make = (options: {
   readonly size?: number | undefined
-  readonly isExcluded: (entry: Entry) => boolean
+  readonly isExcluded?: ((entry: Entry) => boolean) | undefined
 }): Inspector.Inspector => {
   const size = Math.max(1, options.size ?? 1_000)
   const sessions = new Map<string, ReturnType<typeof makeSession>>()

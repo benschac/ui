@@ -14,7 +14,7 @@ export interface Held {
 export type State = (path: string) => BrowserHost.Recorded | undefined
 
 export interface History {
-  readonly record: (entry: Entry, excluded?: boolean) => void
+  readonly record: (entry: Entry) => void
   readonly clear: (session: string, upTo: number) => void
   readonly drop: (session: string) => void
   readonly holds: (session: string, seq: number) => boolean
@@ -107,10 +107,10 @@ const makeSession = (size: number) => {
     return states
   }
   return {
-    record: (entry: Entry, excluded = false) => {
+    record: (entry: Entry) => {
       if (entry.seq <= last) return
       last = entry.seq
-      if (excluded && entry._tag === "Update") {
+      if (entry._tag === "Update" && entry.excluded === true) {
         const replaced = coalesced.get(entry.instance)
         if (replaced !== undefined) {
           entries.splice(entries.lastIndexOf(replaced), 1)
@@ -180,12 +180,12 @@ const makeSession = (size: number) => {
 export const make = (size: number): History => {
   const sessions = new Map<string, ReturnType<typeof makeSession>>()
   return {
-    record: (entry, excluded) => {
+    record: (entry) => {
       let session = sessions.get(entry.session)
       if (session === undefined) {
         sessions.set(entry.session, session = makeSession(size))
       }
-      session.record(entry, excluded)
+      session.record(entry)
     },
     clear: (session, upTo) => {
       sessions.get(session)?.clear(upTo)

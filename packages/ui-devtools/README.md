@@ -46,6 +46,8 @@ It follows the latest entry until one is selected, and remembers whether the pan
 
 `DevTools.layer` accepts `position`, `size` (1,000 shown entries by default) and `exclude` (message `_tag` values matched across every component). Excluded updates add no rows and coalesce per instance between shown entries so high-frequency bursts do not evict the buffer, while keeping the next shown entry's Model diff and Time travel state accurate. `exclude` is not a way to hide sensitive data: later entries still carry whatever an excluded message changed in the Model — use `Schema.Redacted` for sensitive values.
 
+`exclude` is where recording starts, and it can change while the app runs. **Stop recording**, at the top of a selected update, treats its message `_tag` as excluded from the next update on, and the **Not recording** strip under the filters lists the stopped tags, configured ones too. Click a tag to record it again. Entries already evicted don't come back. The choices last for the tab, through reloads, and win over `exclude` for the tags they name. The page marks each excluded update in its Wire frame, so the Node server's copy and the agent tools coalesce the same entries.
+
 It is mounted in an iframe with `MessageLog.noop`, so the page's styles don't reach it, a key pressed or a click in it never reaches the app's document and window listeners, and it never logs its own updates. Its theme follows `prefers-color-scheme`.
 
 ## The MCP server
@@ -73,21 +75,22 @@ Then point the agent at `http://127.0.0.1:4774/mcp`, for example in `.mcp.json`:
 
 The plugin starts the server with `vite dev` only and adds a `<meta>` tag with its URL and `size` to the page, which `DevTools.layer` reads. Without Vite, run `effect-ui-devtools [--port <n>] [--size <n>] [--dispatch]` or `DevToolsServer.layer`, and pass `DevTools.layer({ server: "http://127.0.0.1:4774" })`. A server process can add `MessageLog.socket("ws://127.0.0.1:4774/log", { host: "server" })` to show its renders as sessions.
 
-| Tool                 | Does                                                                      |
-| -------------------- | ------------------------------------------------------------------------- |
-| `list_sessions`      | the sessions held: app, host, connected, controllable, paused at          |
-| `list_instances`     | the instances of a session, with how their Command runs ended             |
-| `list_entries`       | entries as rows without payloads, filtered by instance, kind or `_tag`    |
-| `count_entries`      | entries by entry and message `_tag`                                       |
-| `get_entry`          | one entry's Wire frame                                                    |
-| `get_chain`          | the causal chain the panel shows                                          |
-| `get_state`          | an instance's Model, props and query results, now or at an entry          |
-| `diff_state`         | what an entry changed in its instance's Model                             |
-| `show_entry`         | paints the page at an entry, as Time travel does                          |
-| `resume`             | shows the live page again                                                 |
-| `get_message_schema` | the JSON Schema of an instance's messages, or of one `_tag`               |
-| `dispatch`           | sends 1 to 100 messages to an instance, all decoded first; off by default |
-| `wait`               | waits for the Command runs started since an entry to end                  |
+| Tool                 | Does                                                                                    |
+| -------------------- | --------------------------------------------------------------------------------------- |
+| `list_sessions`      | the sessions held: app, host, connected, controllable, paused at, the tags not recorded |
+| `list_instances`     | the instances of a session, with how their Command runs ended                           |
+| `list_entries`       | entries as rows without payloads, filtered by instance, kind or `_tag`                  |
+| `count_entries`      | entries by entry and message `_tag`                                                     |
+| `get_entry`          | one entry's Wire frame                                                                  |
+| `get_chain`          | the causal chain the panel shows                                                        |
+| `get_state`          | an instance's Model, props and query results, now or at an entry                        |
+| `diff_state`         | what an entry changed in its instance's Model                                           |
+| `show_entry`         | paints the page at an entry, as Time travel does                                        |
+| `resume`             | shows the live page again                                                               |
+| `set_recording`      | stops or starts recording a message `_tag`, as the panel's Stop recording does          |
+| `get_message_schema` | the JSON Schema of an instance's messages, or of one `_tag`                             |
+| `dispatch`           | sends 1 to 100 messages to an instance, all decoded first; off by default               |
+| `wait`               | waits for the Command runs started since an entry to end                                |
 
 The read tools answer from the server's own copy of the log, so they keep working after a reload or a closed tab. The others go to the page while it is open. An agent's `show_entry` is the same pause as Time travel, so the panel shows it and either side can resume it. `dispatch` runs `update` and its real Commands, which is why it needs `dispatch: true` (or `--dispatch`). A redacted field needs a real value, and comes back redacted.
 
@@ -103,11 +106,11 @@ DevTools.layer({ webMcp: { dispatch: true } })
 DevTools.layer({ webMcp: false })
 ```
 
-By default, `DevTools.layer()` registers the 12 read and control tools whenever `document.modelContext` exists. Pass `webMcp: { dispatch: true }` to also register `effect_ui_dispatch`, or `webMcp: false` to disable WebMCP registration.
+By default, `DevTools.layer()` registers the 13 read and control tools whenever `document.modelContext` exists. Pass `webMcp: { dispatch: true }` to also register `effect_ui_dispatch`, or `webMcp: false` to disable WebMCP registration.
 
 Tool names are prefixed with `effect_ui_` (`effect_ui_list_sessions`, `effect_ui_get_state`, etc.) and annotated with `debugging: true`, so agents driving Chrome with `chrome-devtools-mcp` (`--categoryExperimentalThirdParty`) discover them automatically. Tools are unregistered when the Layer closes, and read Wire frames only so `Schema.Redacted` values stay placeholders.
 
-Unlike the Node server, the in-page tools only see the current page load and answer from the overlay's inspector (so `exclude`d updates are not listed and Clear empties the timeline). Both can run at the same time and share the same pause.
+Unlike the Node server, the in-page tools only see the current page load and answer from the overlay's inspector (so Clear empties the timeline). Both can run at the same time and share the same pause.
 
 ## Terminal apps
 

@@ -16,6 +16,7 @@ export interface RequestError {
 
 export interface Page {
   readonly paused: Control.Paused | null
+  readonly notRecording: ReadonlyArray<string>
   readonly request: (
     request: Control.Request
   ) => Effect.Effect<Schema.Json, RequestError>
@@ -98,8 +99,8 @@ const write = hints(false, true, false, true)
 const ListSessions = read(Tool.make("list_sessions", {
   description:
     "Lists the sessions the server holds. A session is one mounted root: a page load, a server render, or a terminal app. " +
-    "Shows whether its page is connected, whether it can be controlled (show_entry, resume, dispatch), " +
-    "and where it is paused.",
+    "Shows whether its page is connected, whether it can be controlled (show_entry, resume, set_recording, " +
+    "dispatch), where it is paused, and the message _tags its page is not recording.",
   success: Result,
   failure: ToolError
 }))
@@ -220,6 +221,21 @@ const Resume = control(Tool.make("resume", {
   failure: ToolError
 }))
 
+const SetRecording = control(Tool.make("set_recording", {
+  description:
+    "Stops or starts recording the updates of a message _tag on the session's page, from its next update. " +
+    "A stopped tag's updates get no rows and take one slot per instance, so a noisy one such as a timer " +
+    "tick can't push other entries out. The choice overrides the page's exclude and lasts until the tab " +
+    "closes. Returns the tags the page is not recording.",
+  parameters: Schema.Struct({
+    session: SessionParam,
+    tag: Schema.String.annotate({ description: "A message _tag." }),
+    recording: Schema.Boolean
+  }),
+  success: Result,
+  failure: ToolError
+}))
+
 const GetMessageSchema = read(Tool.make("get_message_schema", {
   description:
     "Returns the JSON Schema of the messages an instance accepts, as dispatch takes them.",
@@ -291,6 +307,7 @@ export const Tools = Toolkit.make(
   DiffState,
   ShowEntry,
   Resume,
+  SetRecording,
   GetMessageSchema,
   Dispatch,
   Wait
@@ -299,7 +316,8 @@ export const Tools = Toolkit.make(
 export const instructions =
   "Inspects a running Effect UI app in development. Start with list_sessions and list_instances. " +
   "list_entries and get_chain explain what happened and why; get_state and diff_state show state at any entry. " +
-  "show_entry paints the page at an entry, resume returns to the live page. dispatch sends messages when " +
+  "show_entry paints the page at an entry, resume returns to the live page. set_recording stops recording a " +
+  "noisy message _tag so it can't push other entries out. dispatch sends messages when " +
   "enabled, and wait lets the Commands they start finish."
 
 const select = (
@@ -526,6 +544,7 @@ export const handlers = (server: Backend) => {
               paused: page?.paused?.session === session.id
                 ? page.paused.seq
                 : undefined,
+              notRecording: page?.notRecording,
               instances: session.instances().length,
               entries: entries.length,
               first: entries[0]?.seq,
@@ -675,6 +694,10 @@ export const handlers = (server: Backend) => {
       yield* ask(s, { _tag: "Resume" })
       return ok({ resumed: true })
     }),
+    set_recording: Effect.fnUntraced(function*({ recording, session, tag }) {
+      const s = yield* sessionOf(session)
+      return ok(yield* ask(s, { _tag: "SetRecording", tag, recording }))
+    }),
     get_message_schema: Effect.fnUntraced(
       function*({ instance, session, tag }) {
         const s = yield* sessionOf(session)
@@ -764,7 +787,7 @@ export const handlers = (server: Backend) => {
             "logged by the page, but the server can't show them: a skipped " +
             "entry was dropped from the page's buffer before it was sent, " +
             "an evicted one is older than the entries kept, and an excluded " +
-            "one matched exclude.",
+            "one's message _tag is not being recorded.",
         reply.paused === null
           ? undefined
           : "The page is paused: resume to see the live page."

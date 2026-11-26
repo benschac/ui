@@ -16,6 +16,11 @@ export interface Controller {
     seq: number
   ) => Effect.Effect<BrowserHost.Painted | undefined>
   readonly resume: Effect.Effect<void>
+  readonly notRecording: () => ReadonlyArray<string>
+  readonly setRecording: (
+    tag: string,
+    recording: boolean
+  ) => ReadonlyArray<string>
   readonly changes: Stream.Stream<void>
 }
 
@@ -74,7 +79,7 @@ const messageSchema = (
   })
 
 export const makeHandler = (
-  controller: Pick<Controller, "roots" | "size" | "paused" | "paint" | "resume">
+  controller: Omit<Controller, "notRecording" | "changes">
 ): (request: Control.Request) => Effect.Effect<Json, string> => {
   const noRoot = (session: string) =>
     "Session " + session + " has no root on this page."
@@ -112,6 +117,10 @@ export const makeHandler = (
         )
       case "Resume":
         return Effect.as(controller.resume, null)
+      case "SetRecording":
+        return Effect.sync(() => [
+          ...controller.setRecording(request.tag, request.recording)
+        ])
       case "MessageSchema":
         return Effect.flatMap(
           target(request.session, request.instance),
@@ -172,7 +181,8 @@ export const connect = (
       send({
         _tag: "State",
         sessions: Array.from(controller.roots.keys()),
-        paused: controller.paused() ?? null
+        paused: controller.paused() ?? null,
+        notRecording: controller.notRecording()
       })
     )
     yield* state

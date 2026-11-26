@@ -307,6 +307,12 @@ export interface Update extends InstanceBase {
    * renders with are always ready.
    */
   readonly boundary?: number | undefined
+  /**
+   * Set by a log that keeps runs of this `Update` out of its history, such as
+   * DevTools for a message `_tag` it isn't recording. Readers give it no row,
+   * and the instance's next excluded `Update` replaces it.
+   */
+  readonly excluded?: boolean | undefined
 }
 
 /**
@@ -1224,7 +1230,8 @@ export const Wire = Schema.Union([
       Schema.Struct({ owner: Schema.String, message: Schema.Json })
     ),
     viewTransition: Schema.optionalKey(Schema.Array(Schema.String)),
-    boundary: Schema.optionalKey(Schema.Number)
+    boundary: Schema.optionalKey(Schema.Number),
+    excluded: Schema.optionalKey(Schema.Boolean)
   }),
   Schema.TaggedStruct("PropsChanged", { ...InstanceWire, props: Schema.Json }),
   Schema.TaggedStruct("QueryChanged", {
@@ -1583,7 +1590,8 @@ export const makeEncoder = (options?: {
             ...(entry.viewTransition === undefined
               ? undefined
               : { viewTransition: entry.viewTransition }),
-            ...boundaryOf(entry)
+            ...boundaryOf(entry),
+            ...(entry.excluded === true ? { excluded: true } : undefined)
           }
         case "PropsChanged":
           return {

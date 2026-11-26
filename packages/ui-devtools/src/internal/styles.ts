@@ -171,6 +171,9 @@ ${markRules}
 .filter, .tab { padding: 8px 0 7px; color: var(--muted); border-bottom: 2px solid transparent; margin-bottom: -1px; }
 .filter:hover, .tab:hover { color: var(--ink); }
 .filter.on, .tab[data-active] { color: var(--ink); border-bottom-color: var(--ink); }
+.stopped { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 8px; padding: 6px 20px; border-bottom: 1px solid var(--line); color: var(--faint); font-size: 12px; }
+.stopped button { padding: 0 6px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); }
+.stopped button:hover { color: var(--ink); border-color: currentColor; }
 .timeline-box { --chain: var(--ink); display: grid; grid-template-columns: minmax(0, 1fr) auto; min-height: 0; }
 .timeline-box.cmd { --chain: var(--cmd); }
 .gutter { position: relative; width: 8px; border-left: 1px solid var(--line); pointer-events: none; }
@@ -204,6 +207,8 @@ ${markRules}
 .right { overflow: auto; min-height: 0; min-width: 0; display: flex; flex-direction: column; container: detail / inline-size; }
 .ehead { padding: 16px 24px 4px; }
 .ehead-top { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.stop { flex: none; margin: 1px 0 0 auto; padding: 2px 10px; color: var(--muted); white-space: nowrap; }
+.stop:hover { color: var(--ink); }
 .show { flex: none; margin-top: 1px; padding: 2px 10px; border: 1px solid var(--line); border-radius: 6px; color: var(--muted); white-space: nowrap; }
 .show:hover { color: var(--ink); }
 .show.on { background: var(--ink); border-color: var(--ink); color: var(--bg); }

@@ -42,6 +42,8 @@ export interface Feed {
   readonly failures: () => number
   readonly open: boolean
   readonly position: () => Position
+  /** The message tags not recorded, when the page has a recorder to change. */
+  readonly notRecording?: (() => ReadonlyArray<string>) | undefined
 }
 
 export class Pages extends Context.Service<Pages, {
@@ -52,6 +54,10 @@ export class Pages extends Context.Service<Pages, {
   readonly resume: Effect.Effect<void>
   readonly clear: (session: string) => Effect.Effect<void>
   readonly setOpen: (open: boolean) => Effect.Effect<void>
+  readonly setRecording: (
+    tag: string,
+    recording: boolean
+  ) => Effect.Effect<void>
   readonly setPosition: (position: Position) => Effect.Effect<void>
 }>()("@effect/ui-devtools/Pages") {}
 
@@ -123,6 +129,7 @@ const OverlayMessage = UiSchema.TaggedEnum({
   ScrubbedPage: { seq: Schema.Number },
   ClickedResume: {},
   ClickedClear: {},
+  ClickedRecording: { tag: Schema.String, recording: Schema.Boolean },
   Cleared: {},
   Painted: Paused.fields,
   FailedPaint: Page.fields,
@@ -202,6 +209,22 @@ export class SaveOpen extends Command.Service<SaveOpen>()(
     Effect.gen(function*() {
       const pages = yield* Pages
       return ({ open }) => Effect.as(pages.setOpen(open), Component.noop)
+    })
+  )
+}
+
+export class SetRecording extends Command.Service<SetRecording>()(
+  "devtools/SetRecording",
+  {
+    args: { tag: Schema.String, recording: Schema.Boolean },
+    success: Component.Noop
+  }
+) {
+  static readonly layer = this.toLayer(
+    Effect.gen(function*() {
+      const pages = yield* Pages
+      return ({ recording, tag }) =>
+        Effect.as(pages.setRecording(tag, recording), Component.noop)
     })
   )
 }
@@ -822,6 +845,23 @@ const Filters = (h: H, model: OverlayModel) =>
           String(model.filter === filter)
         )
         .on("click", OverlayMessage.ClickedFilter({ filter })).children(label)
+    )
+  )
+
+const NotRecording = (h: H, tags: ReadonlyArray<string>) =>
+  tags.length === 0 ? null : h.div.class("stopped").attr("role", "group").attr(
+    "aria-label",
+    "Not recording"
+  ).children(
+    h.span.children("Not recording"),
+    tags.map((tag) =>
+      h.button.key(tag).class("code").attr(
+        "aria-label",
+        "Start recording " + tag
+      ).attr("title", "Start recording " + tag).on(
+        "click",
+        OverlayMessage.ClickedRecording({ tag, recording: true })
+      ).children(tag)
     )
   )
 
@@ -1719,6 +1759,9 @@ const Inspected = (
     : entry._tag
   const paintable = feed.paintable(entry.session, entry.seq)
   const shown = shows(model, entry.session, entry.seq)
+  const tag = entry._tag === "Update" ? Read.tagOf(entry.message) : undefined
+  const stoppable = tag !== undefined &&
+    feed.notRecording?.().includes(tag) === false
   return [
     h.section.class("ehead").children(
       h.div.class("ehead-top").children(
@@ -1726,6 +1769,17 @@ const Inspected = (
           Name(h, entry, label.text),
           label.detail === undefined ? null : " " + label.detail
         ),
+        stoppable
+          ? h.button.class("stop").attr("aria-label", "Stop recording " + tag)
+            .attr(
+              "title",
+              "Stop recording " + tag +
+                " updates, so a burst of them can't push other entries out"
+            ).on(
+              "click",
+              OverlayMessage.ClickedRecording({ tag, recording: false })
+            ).children("Stop recording")
+          : null,
         h.button.class("show", shown && "on").attr(
           "aria-pressed",
           String(shown)
@@ -1824,7 +1878,10 @@ const Panel = (h: H, model: OverlayModel) => {
     h.div.class("body").children(
       h.div.class("left").children(
         Instances(h, session, model, owner, timeline),
-        Filters(h, model),
+        h.div.children(
+          Filters(h, model),
+          NotRecording(h, feed.notRecording?.() ?? [])
+        ),
         Timeline(
           h,
           session,
@@ -2061,6 +2118,8 @@ export const Overlay = Html.component({
         .run(Paint.make(page))
     },
     ClickedResume: ($) => $.evolve(resumed).run(resumePage()),
+    ClickedRecording: ($, { recording, tag }) =>
+      $.run(SetRecording.make({ tag, recording })),
     ClickedClear: ($) => {
       const session = sessionOf($.props.feed, $.model)
       return pageAt($.model) !== null || session === undefined
@@ -2127,6 +2186,7 @@ export const mountOverlay = (
         Paint.layer,
         Clear.layer,
         SaveOpen.layer,
+        SetRecording.layer,
         SavePosition.layer
       ).pipe(Layer.provide(Layer.succeed(Pages, pages)))
     ),

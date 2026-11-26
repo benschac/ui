@@ -421,27 +421,28 @@ describe("DevTools overlay", { concurrent: false }, () => {
         HtmlLocator.queryAllByRole(root, "button", {
           name: new RegExp("Update " + tag + "$")
         }).filter((node) => node.classList.contains("row-button"))
-      const session = (exclude: ReadonlyArray<string>) =>
-        Effect.gen(function*() {
-          localStorage.clear()
-          const app = document.body.appendChild(document.createElement("div"))
-          yield* Effect.addFinalizer(() => Effect.sync(() => app.remove()))
-          yield* Layer.build(DevTools.layer({ size: 3, exclude })).pipe(
-            Effect.flatMap((services) =>
-              BrowserHost.mountEffect(Clock, {}, app).pipe(
-                Effect.provide(services)
-              )
+      const session = Effect.fnUntraced(function*(
+        exclude: ReadonlyArray<string>
+      ) {
+        localStorage.clear()
+        const app = document.body.appendChild(document.createElement("div"))
+        yield* Effect.addFinalizer(() => Effect.sync(() => app.remove()))
+        yield* Layer.build(DevTools.layer({ size: 3, exclude })).pipe(
+          Effect.flatMap((services) =>
+            BrowserHost.mountEffect(Clock, {}, app).pipe(
+              Effect.provide(services)
             )
           )
-          yield* settle
-          const root = overlay()
-          yield* open(root)
-          const tick = HtmlLocator.getByRole(app, "button", { name: "Tick" })
-          const ticks = Effect.fnUntraced(function*(count: number) {
-            for (let n = 0; n < count; n++) yield* click(tick)
-          })
-          return { app, root, ticks }
+        )
+        yield* settle
+        const root = overlay()
+        yield* open(root)
+        const tick = HtmlLocator.getByRole(app, "button", { name: "Tick" })
+        const ticks = Effect.fnUntraced(function*(count: number) {
+          for (let n = 0; n < count; n++) yield* click(tick)
         })
+        return { app, root, ticks }
+      })
 
       yield* Effect.scoped(Effect.gen(function*() {
         const { app, root, ticks } = yield* session(["Ticked"])
